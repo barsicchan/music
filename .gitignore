@@ -1,0 +1,28 @@
+# зависимости
+node_modules/
+
+# сборка: бандл бэкенда и portable .exe
+dist/
+release/
+
+# логи
+logs/
+*.log
+
+# локальные данные приложения — создаются сами с дефолтами при первом запуске
+twitch.json
+bot.json
+config.json
+app.json
+.brsc-state.json
+.window-state.json
+
+# контекст для Claude Code — локальный
+CLAUDE.md
+
+# системное / редакторы
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

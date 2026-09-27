@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>brsc / music — оверлей</title>
+<link rel="stylesheet" href="/fonts/fonts.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: transparent; }
+  body { min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    font-family: 'Comfortaa', system-ui, sans-serif; }
+
+  .bar {
+    --h: 260; --s: 40%; --sg: 90%; --l-base: 32%;
+    position: relative; overflow: hidden; isolation: isolate; color: #fff;
+    background: hsl(var(--h) var(--s) var(--l-base));
+    box-shadow: 0 14px 30px rgba(10, 8, 25, .38);
+    display: flex; align-items: center; opacity: 0; transition: opacity .35s ease; flex: none;
+  }
+  /* заливка на всю ширину, «наполнение» — сдвигом влево (transform → анимируется композитором,
+     не троттлится в OBS-браузере при hidden). Светящийся край = правая граница заливки. */
+  .fill { position: absolute; inset: 0; width: 100%; z-index: 1;
+    transform: translateX(-100%); transform-origin: left center; will-change: transform;
+    background: linear-gradient(180deg, rgba(255,255,255,.20), rgba(255,255,255,.12));
+    border-right: 2px solid hsl(var(--h) var(--sg) 80%);
+    box-shadow: 3px 0 16px 2px hsl(var(--h) var(--sg) 64% / .85); }
+  /* режим «жидкое стекло»: матовая (frost) полупрозрачная плашка — молочная вуаль + зерно +
+     specular-блик + кромка. backdrop-filter реально блюрит в панели/браузере; в OBS источник
+     не видит слои сцены под собой, поэтому блюра стрима нет — но молочность + зерно имитируют
+     матовое стекло, а стрим просвечивает диффузным цветом. */
+  .bar.glass {
+    background:
+      linear-gradient(110deg, rgba(255,255,255,.22), rgba(255,255,255,0) 34%),
+      linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.13)),
+      linear-gradient(180deg, hsl(var(--h) var(--s) calc(var(--l-base) + 18%) / .40), hsl(var(--h) var(--s) var(--l-base) / .30));
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    backdrop-filter: blur(18px) saturate(140%);
+    box-shadow:
+      0 16px 36px rgba(8, 6, 20, .42),
+      inset 0 1px 0 rgba(255,255,255,.6),
+      inset 0 0 0 1px rgba(255,255,255,.2),
+      inset 0 -16px 28px rgba(0,0,0,.10);
+  }
+  /* зерно матового стекла (SVG-шум, самодостаточно — фон сцены не нужен) */
+  .bar.glass::after {
+    content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 140px 140px; mix-blend-mode: soft-light; opacity: .25;
+  }
+  .bar.glass .meta { text-shadow: 0 1px 4px rgba(0,0,0,.55); }
+  .bar.glass .fill { background: linear-gradient(180deg, rgba(255,255,255,.26), rgba(255,255,255,.14)); }
+
+  .cover { position: relative; z-index: 2; flex: none; object-fit: cover;
+    background: hsl(var(--h) var(--s) 42%);
+    box-shadow: 0 3px 10px rgba(0,0,0,.32), inset 0 0 0 1px rgba(255,255,255,.08); }
+  .meta { position: relative; z-index: 2; min-width: 0; text-shadow: 0 1px 3px rgba(0,0,0,.4); }
+  .title, .artist, .oneline { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .title { font-weight: 700; }
+  .artist { font-weight: 500; opacity: .85; }
+  .oneline b { font-weight: 700; }
+  .oneline .dim { opacity: .8; font-weight: 500; }
+
+  .scroll { overflow: hidden; text-overflow: clip;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 16px), transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 16px), transparent 100%); }
+  .scroll .track { display: inline-flex; white-space: nowrap; will-change: transform;
+    animation: mq linear infinite; animation-duration: 20s; }
+  @keyframes mq { to { transform: translateX(calc(-1 * var(--dist, 50%))); } }
+
+  /* размеры */
+  .s-large { width: 520px; height: 92px; border-radius: 18px; }
+  .s-large .cover { width: 74px; height: 74px; margin: 9px; border-radius: 12px; }
+  .s-large .meta { flex: 1; padding: 0 18px 0 6px; }
+  .s-large .title { font-size: 19px; line-height: 1.15; }
+  .s-large .artist { font-size: 14px; margin-top: 7px; line-height: 1.15; }
+
+  .s-regular { width: 452px; height: 74px; border-radius: 16px; }
+  .s-regular .cover { width: 58px; height: 58px; margin: 8px; border-radius: 11px; }
+  .s-regular .meta { flex: 1; padding: 0 16px 0 5px; }
+  .s-regular .title { font-size: 16px; line-height: 1.15; }
+  .s-regular .artist { font-size: 12.5px; margin-top: 6px; line-height: 1.15; }
+
+  .s-slim { width: 392px; height: 46px; border-radius: 12px; }
+  .s-slim .cover { width: 30px; height: 30px; margin: 8px; border-radius: 7px; }
+  .s-slim .meta { flex: 1; padding: 0 14px 0 4px; }
+  .s-slim .oneline { font-size: 14px; line-height: 1.2; }
+
+  .s-square { width: 196px; flex-direction: column; align-items: stretch; border-radius: 18px; }
+  .s-square .cover { width: 178px; height: 178px; margin: 9px auto 0; border-radius: 13px; align-self: center; }
+  .s-square .meta { padding: 9px 13px 13px; }
+  .s-square .title { font-size: 15px; line-height: 1.2; }
+  .s-square .artist { font-size: 12px; margin-top: 5px; line-height: 1.2; }
+</style>
+</head>
+<body>
+  <div class="bar" id="bar">
+    <div class="fill" id="fill"></div>
+    <img class="cover" id="cover" alt="" />
+    <video class="cover" id="shot" muted loop autoplay playsinline preload="auto" style="display:none"></video>
+    <div class="meta" id="meta"></div>
+  </div>
+
+  <script>
+  var SIZES = ['square', 'slim', 'regular', 'large'];
+  var SEP = '  ✦  '; // «✦» с пробелами между повторами
+
+  var bar = document.getElementById('bar');
+  var fill = document.getElementById('fill');
+  var cover = document.getElementById('cover');
+  var shot = document.getElementById('shot');
+  var meta = document.getElementById('meta');
+  var t1 = null, t2 = null, curSize = null;
+
+  // предпросмотр в панели (?bg=grid или ?preview=1): плашку не прячем на паузе,
+  // чтобы можно было настраивать вид. В OBS плашка затухает на паузе.
+  var qp = new URLSearchParams(location.search);
+  var isPreview = qp.get('bg') === 'grid' || qp.get('preview') === '1';
+  // фон-«шахматка» только для предпросмотра в панели (?bg=grid); в OBS фон прозрачный
+  if (qp.get('bg') === 'grid') {
+    document.body.style.backgroundColor = '#141518';
+    document.body.style.backgroundImage = 'linear-gradient(45deg,#191a1e 25%,transparent 25%,transparent 75%,#191a1e 75%),linear-gradient(45deg,#191a1e 25%,transparent 25%,transparent 75%,#191a1e 75%)';
+    document.body.style.backgroundSize = '22px 22px';
+    document.body.style.backgroundPosition = '0 0,11px 11px';
+  }
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]; }); }
+  function hexToHsl(hex) {
+    hex = String(hex || '').replace('#', '');
+    if (hex.length === 3) hex = hex.split('').map(function (c) { return c + c; }).join('');
+    var r = parseInt(hex.slice(0, 2), 16) / 255, g = parseInt(hex.slice(2, 4), 16) / 255, b = parseInt(hex.slice(4, 6), 16) / 255;
+    if (isNaN(r) || isNaN(g) || isNaN(b)) return null;
+    var max = Math.max(r, g, b), min = Math.min(r, g, b), h = 0, s = 0, l = (max + min) / 2, dd = max - min;
+    if (dd) { s = l > 0.5 ? dd / (2 - max - min) : dd / (max + min);
+      if (max === r) h = (g - b) / dd + (g < b ? 6 : 0); else if (max === g) h = (b - r) / dd + 2; else h = (r - g) / dd + 4; h *= 60; }
+    return { h: Math.round(h), s: Math.round(s * 100), l: Math.round(l * 100) };
+  }
+  function applyAccent(hex) {
+    var c = hexToHsl(hex) || { h: 260, s: 22, l: 40 };
+    bar.style.setProperty('--h', c.h);
+    bar.style.setProperty('--s', Math.max(10, Math.min(55, c.s)) + '%');   // насыщенность базы (под белый текст)
+    bar.style.setProperty('--sg', Math.max(40, Math.min(95, c.s + 30)) + '%'); // насыщенность свечения края
+  }
+
+  // текст с прокруткой только при переполнении
+  function setText(el, html) {
+    el.classList.remove('scroll');
+    el.innerHTML = html;
+    if (el.scrollWidth > el.clientWidth + 2) {
+      var seg = html + SEP;
+      el.classList.add('scroll');
+      el.innerHTML = '<span class="track"><span>' + seg + '</span><span>' + seg + '</span></span>';
+      var track = el.querySelector('.track');
+      var w = track.children[0].getBoundingClientRect().width;
+      track.style.setProperty('--dist', w + 'px');
+      track.style.animationDuration = (w / 40).toFixed(2) + 's';
+    }
+  }
+  function renderMeta(title, artist) {
+    if (curSize === 'slim') setText(t1, '<b>' + esc(title) + '</b>' + (artist ? ' <span class="dim">— ' + esc(artist) + '</span>' : ''));
+    else { setText(t1, esc(title)); if (t2) setText(t2, esc(artist)); }
+  }
+
+  // размер приходит из конфига (панель), может меняться на лету
+  function applySize(size) {
+    if (SIZES.indexOf(size) < 0) size = 'large';
+    if (size === curSize) return;
+    if (curSize) bar.classList.remove('s-' + curSize);
+    bar.classList.add('s-' + size);
+    curSize = size;
+    if (size === 'slim') meta.innerHTML = '<div class="oneline" id="t1"></div>';
+    else meta.innerHTML = '<div class="title" id="t1"></div><div class="artist" id="t2"></div>';
+    t1 = document.getElementById('t1');
+    t2 = document.getElementById('t2');
+    if (st.title != null) renderMeta(st.title, st.artist || '');
+  }
+
+  var st = { title: null, artist: null, cover: null, shot: null, pos: 0, dur: 0, playing: false, color: null };
+
+  function setMedia(s) {
+    var wantShot = s.overlay && s.overlay.media === 'videoshot' && s.videoShot;
+    if (wantShot) {
+      if (s.videoShot !== st.shot) { shot.src = s.videoShot; st.shot = s.videoShot; var p = shot.play(); if (p && p.catch) p.catch(function () {}); }
+      shot.style.display = ''; cover.style.display = 'none';
+    } else {
+      if (s.cover && s.cover !== st.cover) { cover.src = s.cover; st.cover = s.cover; }
+      cover.style.display = ''; shot.style.display = 'none';
+    }
+  }
+
+  // прогресс: композиторная анимация transform до конца трека за оставшееся время
+  function setProgress() {
+    var frac = st.dur ? Math.max(0, Math.min(1, st.pos / st.dur)) : 0;
+    var remaining = st.dur ? Math.max(0, st.dur - st.pos) : 0;
+    fill.style.transition = 'none';
+    fill.style.transform = 'translateX(' + ((frac - 1) * 100).toFixed(3) + '%)';
+    void fill.offsetWidth; // зафиксировать стартовую позицию до включения перехода
+    if (st.playing && remaining > 0.25) {
+      fill.style.transition = 'transform ' + remaining.toFixed(2) + 's linear';
+      fill.style.transform = 'translateX(0%)';
+    }
+  }
+
+  // плавное появление/затухание плашки. На паузу прячем с задержкой (чтобы не моргало
+  // на стыке треков), на воспроизведение — показываем сразу.
+  var visTimer = null, visState = false;
+  function setVisible(show) {
+    if (show) {
+      if (visTimer) { clearTimeout(visTimer); visTimer = null; }
+      if (!visState) { visState = true; bar.style.opacity = '1'; }
+    } else if (visState && !visTimer) {
+      visTimer = setTimeout(function () { visState = false; bar.style.opacity = '0'; visTimer = null; }, 500);
+    }
+  }
+
+  function update(s) {
+    if (!s || !s.title) { setVisible(false); return; }
+    applySize(s.overlay && s.overlay.size ? s.overlay.size : 'large');
+    bar.classList.toggle('glass', !!(s.overlay && s.overlay.glass));
+    if (s.color && s.color !== st.color) { applyAccent(s.color); st.color = s.color; }
+    setMedia(s);
+    if (s.title !== st.title || s.artist !== st.artist) { renderMeta(s.title, s.artist || ''); st.title = s.title; st.artist = s.artist; }
+    st.pos = s.position || 0; st.dur = s.duration || 0;
+    st.playing = (s.status === 'playing' || s.playbackState === 'playing');
+    setVisible(isPreview || st.playing); // в предпросмотре — всегда видно, в OBS — только при игре
+    setProgress();
+  }
+
+  function poll() {
+    fetch('/api/state').then(function (r) { return r.json(); }).then(function (d) { if (d && d.state) { d.state.overlay = d.overlay; update(d.state); } }).catch(function () {});
+  }
+  poll();
+  setInterval(poll, 1500);
+  // пересчёт прокрутки после загрузки шрифта
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { if (st.title != null) renderMeta(st.title, st.artist || ''); });
+  </script>
+</body>
+</html>

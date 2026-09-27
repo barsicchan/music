@@ -1,0 +1,888 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>brsc / music</title>
+<link rel="stylesheet" href="/fonts/fonts.css">
+<style>
+  :root{
+    --bg:#0d0a10; --card:#17121d; --card2:#1f1826; --line:#2b2233; --line2:#372c42;
+    --text:#efecf2; --mut:#9b93a6; --dim:#6d6579;
+    --acc:#e83c5d; --acc-soft:rgba(232,60,93,.15); --acc-dim:#b93a52;
+    --ok:#6fd39b; --warn:#e0a367; --err:#ff8a8a;
+    --font-head:'Comfortaa','Trebuchet MS',sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;}
+  body{font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--text);background:var(--bg);
+    background-image:
+      radial-gradient(900px 520px at 16% -12%, rgba(232,60,93,.18), transparent 58%),
+      radial-gradient(760px 520px at 104% -6%, rgba(150,60,232,.12), transparent 55%);
+    height:100vh;overflow:hidden;font-size:14px;}
+  /* запрет выделения текста в интерфейсе, но в текстовых полях (и логе) — можно */
+  body{user-select:none;-webkit-user-select:none;}
+  input,textarea,[contenteditable="true"],.logview{user-select:text;-webkit-user-select:text;}
+  .app{display:flex;height:100vh;}
+  a{color:inherit;}
+  h1{font-family:var(--font-head);font-size:28px;font-weight:700;margin:0;letter-spacing:-.5px;}
+  h2{font-family:var(--font-head);font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);margin:0 0 12px;font-weight:700;}
+  .muted{color:var(--dim);font-size:13px;padding:6px 0;}
+  .hint{color:var(--dim);font-size:12.5px;line-height:1.6;}
+  b{font-weight:700;} code{background:var(--card2);padding:1px 6px;border-radius:6px;font-size:12px;}
+  /* фокус и нажатие — как в дизайн-ките barsic-ui */
+  :where(button,select,input,textarea,a.nav-item):focus-visible{outline:2px solid var(--acc);outline-offset:2px;}
+  button,.nav-item{transition:background .18s ease,color .18s ease,border-color .18s ease,transform .1s ease;}
+  button:active,.nav-item:active{transform:scale(.97);}
+
+  /* скроллбары: нативный прячем, свой оверлейный thumb с фейдом */
+  .scroll-area{scrollbar-width:none;}
+  .scroll-area::-webkit-scrollbar{width:0;height:0;display:none;}
+  .sb-thumb{position:absolute;right:3px;top:0;width:5px;border-radius:4px;background:#5b5065;
+    opacity:0;transition:opacity .4s ease;pointer-events:none;z-index:6;}
+  .sb-thumb.on{opacity:1;}
+
+  /* ---- сайдбар ---- */
+  .side{width:236px;flex:none;display:flex;flex-direction:column;padding:14px 13px;overflow:hidden;position:relative;
+    border-right:1px solid var(--line);background:rgba(18,14,23,.55);backdrop-filter:blur(20px);
+    transition:width .22s cubic-bezier(.4,0,.2,1);}
+  .ico{width:40px;height:40px;flex:none;display:grid;place-items:center;}
+  .ico>svg{width:20px;height:20px;}
+  .hamb{border:none;background:transparent;color:var(--mut);cursor:pointer;padding:0;border-radius:12px;margin-bottom:6px;flex:none;}
+  .hamb:hover{background:var(--card);color:var(--text);}
+  .brand{display:flex;align-items:center;padding:2px 0 14px;overflow:hidden;white-space:nowrap;flex:none;font-family:var(--font-head);}
+  .brand .logo{width:32px;height:32px;border-radius:12px;background:linear-gradient(135deg,var(--acc),#ff7a95);
+    display:grid;place-items:center;box-shadow:0 4px 14px rgba(232,60,93,.4);}
+  .brand .logo svg{width:21px;height:21px;}
+  .brand .txt{margin-left:6px;transition:opacity .13s ease;}
+  .brand b{font-size:16px;font-weight:700;letter-spacing:.2px;} .brand .unit{color:var(--mut);font-size:15px;font-weight:500;}
+  .nav{display:flex;flex-direction:column;gap:2px;flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;}
+  .nav-sep{height:1px;background:var(--line);margin:12px 10px;flex:none;}
+  .nav-item{display:flex;align-items:center;padding:0;border-radius:12px;color:var(--mut);flex-shrink:0;
+    font-size:14px;font-weight:500;cursor:pointer;text-decoration:none;position:relative;white-space:nowrap;overflow:hidden;}
+  .nav-item span:not(.ico){margin-left:6px;transition:opacity .13s ease;}
+  .nav-item:hover{background:var(--card);color:var(--text);}
+  .nav-item.active{background:var(--acc-soft);color:#fff;}
+  .nav-item.active .ico{color:var(--acc);}
+  .nav-item.active::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);height:18px;width:3px;border-radius:0 3px 3px 0;background:var(--acc);}
+  .side.collapsed{width:66px;}
+  .side.collapsed .brand .txt{opacity:0;}
+  .side.collapsed .nav-item span:not(.ico){opacity:0;}
+
+  /* ---- основная область ---- */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0;position:relative;}
+  /* заголовок раздела — верхняя НЕпрокручиваемая панель; сюда справа заходят кнопки окна,
+     а контент листается ПОД ним (а не под кнопками). Вся полоса — область перетаскивания окна. */
+  .head{position:relative;display:flex;align-items:center;gap:12px;flex:none;padding:62px 28px 14px;-webkit-app-region:drag;}
+  .head h1{height:40px;line-height:40px;}
+  .content{flex:1;overflow-y:auto;overflow-x:hidden;padding:4px 28px 22px;}
+  .brand{-webkit-app-region:drag;}
+  button,input,select,a,.nav-item,.hamb,.banmenu,.ov-url input{-webkit-app-region:no-drag;}
+  /* прозрачные кнопки управления окном — плавают в правом верхнем углу (только в приложении) */
+  .wctl{position:absolute;top:0;right:0;display:none;z-index:200;-webkit-app-region:no-drag;}
+  body.has-titlebar .wctl{display:flex;}
+  .wctl button{width:46px;height:38px;border:none;background:transparent;color:var(--mut);border-radius:0;padding:0;cursor:pointer;display:grid;place-items:center;}
+  .wctl button svg{width:12px;height:12px;stroke:currentColor;stroke-width:1.3;fill:none;stroke-linecap:round;}
+  .wctl button:hover{background:rgba(255,255,255,.09);color:var(--text);}
+  .wctl button.close:hover{background:#e81123;color:#fff;}
+  /* быстрый переключатель приёма заказов в шапке (дублирует чекбокс в Настройках) */
+  .srtoggle{margin-left:auto;display:flex;align-items:center;gap:10px;height:40px;padding:0 12px 0 14px;border-radius:12px;
+    border:1px solid var(--line2);background:var(--card2);color:var(--mut);font:inherit;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap;}
+  .srtoggle:hover{background:#28202f;color:var(--text);}
+  .srtoggle .sw{position:relative;width:34px;height:20px;border-radius:10px;background:#3a3044;flex:none;transition:background .18s ease;}
+  .srtoggle .sw::after{content:'';position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#9b93a6;transition:transform .18s ease,background .18s ease;}
+  .srtoggle.on{color:var(--text);border-color:rgba(232,60,93,.4);background:var(--acc-soft);}
+  .srtoggle.on .sw{background:var(--acc);}
+  .srtoggle.on .sw::after{transform:translateX(14px);background:#fff;}
+  .srtoggle:disabled{opacity:.45;cursor:default;}
+
+  .pane{display:none;} .pane.active{display:block;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;}
+  .card + .card{margin-top:14px;}
+  .sec-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .sec-h h2{margin:0;} .sec-h a{font-size:13px;color:var(--acc);text-decoration:none;font-weight:500;cursor:pointer;}
+
+  /* плеер */
+  .np{display:flex;gap:18px;align-items:center;}
+  .np .cover{width:108px;height:108px;border-radius:14px;object-fit:cover;flex:none;background:var(--card2);
+    box-shadow:0 10px 28px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.05);}
+  .np-info{flex:1;min-width:0;}
+  .np-title{font-family:var(--font-head);font-size:25px;font-weight:700;letter-spacing:-.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.18;}
+  .np-artist{font-size:15px;color:var(--mut);font-weight:500;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .prog{display:flex;align-items:center;gap:11px;margin-top:15px;}
+  .prog .tm{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;font-weight:500;flex:none;}
+  .prog .bar{flex:1;height:6px;border-radius:4px;background:#2a2230;overflow:hidden;}
+  .prog .bar>div{height:100%;width:0%;border-radius:4px;background:linear-gradient(90deg,var(--acc),#ff6f8b);box-shadow:0 0 10px rgba(232,60,93,.5);transition:width .4s linear;}
+  .np-meta{font-size:12px;color:var(--dim);margin-top:8px;}
+  .np-ctl{display:flex;flex-direction:column;gap:9px;margin-left:auto;align-items:flex-end;flex:none;}
+  .np-transport{display:flex;gap:8px;} .np-actions{display:flex;gap:8px;}
+  .icobtn{width:40px;height:40px;padding:0;border-radius:12px;border:1px solid var(--line2);background:var(--card2);color:var(--text);
+    display:grid;place-items:center;cursor:pointer;flex:none;}
+  .icobtn:hover{background:#28202f;} .icobtn svg{width:18px;height:18px;display:block;} .icobtn.play svg{width:19px;height:19px;}
+  .icobtn.play{background:var(--acc);border-color:var(--acc);color:#fff;box-shadow:0 6px 18px rgba(232,60,93,.4);}
+  .actbtn{width:40px;height:40px;padding:0;border-radius:12px;border:1px solid var(--line2);background:var(--card2);color:var(--mut);
+    display:grid;place-items:center;cursor:pointer;flex:none;}
+  .actbtn:hover{background:#28202f;color:var(--text);} .actbtn svg{width:18px;height:18px;display:block;}
+  .actbtn.like .ic-heart path{fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round;}
+  .actbtn.like .ic-heartoff{display:none;}
+  .actbtn.like.liked{color:var(--acc);border-color:rgba(232,60,93,.4);background:var(--acc-soft);}
+  .actbtn.like.liked .ic-heart path{fill:currentColor;stroke:none;}
+  .actbtn.like.liked:hover .ic-heart{display:none;}
+  .actbtn.like.liked:hover .ic-heartoff{display:block;}
+  /* кнопка копирования ссылки: плавная галочка вместо текста «скопировано» */
+  .copybtn{position:relative;transition:background .22s ease,border-color .22s ease,color .22s ease;}
+  .copybtn svg{transition:opacity .22s ease;}
+  .copybtn .ic-check{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);opacity:0;}
+  .copybtn.copied{color:var(--ok);border-color:rgba(87,208,129,.45);background:rgba(87,208,129,.13);}
+  .copybtn.copied .ic-link{opacity:0;}
+  .copybtn.copied .ic-check{opacity:1;}
+  .banwrap{position:relative;}
+  .banmenu{position:absolute;top:calc(100% + 6px);right:0;min-width:200px;background:var(--card2);border:1px solid var(--line2);
+    border-radius:12px;padding:5px;box-shadow:0 14px 34px rgba(0,0,0,.55);display:none;flex-direction:column;gap:2px;z-index:10;}
+  .banmenu.open{display:flex;}
+  .banmenu button{background:transparent;border:none;color:var(--text);text-align:left;padding:9px 11px;border-radius:10px;
+    font-size:13.5px;cursor:pointer;font-family:inherit;white-space:nowrap;display:flex;align-items:center;gap:9px;}
+  .banmenu button:hover{background:var(--card);} .banmenu svg{width:15px;height:15px;color:var(--mut);}
+
+  /* заказать */
+  .reqrow{display:flex;gap:10px;align-items:center;}
+  .reqrow input{flex:1;background:var(--bg);border:1px solid var(--line2);color:var(--text);border-radius:12px;
+    padding:12px 14px;font-size:14px;font-family:inherit;}
+  .reqrow input::placeholder{color:var(--dim);} .reqrow input:focus{outline:none;border-color:var(--acc);}
+
+  /* списки заказов/очереди */
+  ul{list-style:none;margin:0;padding:0;}
+  li{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #241d2c;}
+  li:last-child{border-bottom:none;}
+  .q-idx{color:var(--dim);font-variant-numeric:tabular-nums;width:22px;text-align:right;font-size:12px;flex:none;}
+  .q-cur{color:var(--acc);}
+  .q-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .req-user{color:var(--mut);font-size:12px;white-space:nowrap;}
+  .badge{font-size:11px;border-radius:20px;padding:2px 9px;white-space:nowrap;}
+  .b-queued{background:var(--acc-soft);color:#f0a6b6;border:1px solid rgba(232,60,93,.3);}
+  .b-played{background:var(--card2);color:var(--mut);} .b-pending{background:#3a2e10;color:var(--warn);}
+  .b-cancelled,.b-rejected{background:#3a1a1f;color:#f2a3ab;}
+
+  /* формы */
+  input[type=text],input[type=number],input[type=password]{background:var(--bg);border:1px solid var(--line2);color:var(--text);
+    border-radius:12px;padding:10px 12px;font-size:14px;width:100%;font-family:inherit;}
+  input:focus{outline:none;border-color:var(--acc);}
+  select{background:var(--bg);border:1px solid var(--line2);color:var(--text);border-radius:12px;padding:9px 10px;font-size:14px;font-family:inherit;}
+  select:focus{outline:none;border-color:var(--acc);}
+  .grid{display:grid;grid-template-columns:1fr 130px;gap:10px 12px;align-items:center;}
+  .grid label{font-size:14px;color:#cfcfd4;} .grid .full{grid-column:1/-1;}
+  .chk{display:flex;align-items:center;gap:8px;} .chk input{width:auto;}
+  input[type=checkbox]{width:16px;height:16px;accent-color:var(--acc);cursor:pointer;}
+
+  button{background:var(--card2);color:var(--text);border:1px solid var(--line2);border-radius:12px;padding:10px 14px;font-size:14px;cursor:pointer;font-family:inherit;}
+  button:hover{background:#28202f;}
+  button.primary{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:600;box-shadow:0 6px 16px rgba(232,60,93,.3);}
+  button.primary:hover{background:#f04e6c;}
+  button.sm{padding:6px 11px;font-size:13px;}
+  button.ok{background:#14481f;border-color:#1c6a2d;color:#cfefd4;} button.no{background:#4a1720;border-color:#6a1f2c;color:#f2c9cf;}
+  .status{font-size:13px;min-height:18px;margin-top:8px;} .status.err{color:var(--err);} .status.ok{color:var(--ok);}
+
+  /* аккаунты twitch */
+  .acct{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #241d2c;}
+  .acct:last-of-type{border-bottom:none;} .acct .who{min-width:0;} .acct .btns{display:flex;gap:6px;flex:none;}
+  .logged{color:var(--ok);}
+
+  /* команды/ответы */
+  .cmd{display:grid;grid-template-columns:1fr 120px 54px 150px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #241d2c;}
+  .cmd:last-child{border-bottom:none;} .cmd .cmd-name{font-size:14px;overflow:hidden;text-overflow:ellipsis;}
+  .cmd input[type=text]{padding:6px 8px;font-size:13px;} .cmd select{padding:6px 8px;font-size:13px;width:100%;}
+  .cmd .chk{font-size:12px;color:var(--mut);}
+  .resp{padding:8px 0;border-bottom:1px solid #241d2c;} .resp:last-child{border-bottom:none;}
+  .resp label{display:block;font-size:12px;color:var(--mut);margin-bottom:4px;} .resp input[type=text]{font-size:13px;padding:7px 9px;}
+
+  /* ovlist (twitch/overlay) */
+  .ovlist{margin-top:8px;}
+  .ovlist .r{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 0;border-bottom:1px solid #241d2c;}
+  .ovlist .r:last-child{border-bottom:none;} .ovlist .r .k{font-size:14px;color:#cfcfd4;}
+  .ovlist select{min-width:184px;} .ov-port{display:flex;gap:6px;align-items:center;} .ov-port input[type=number]{width:96px;}
+  .ov-url{display:flex;gap:8px;margin-top:6px;}
+
+  /* лог/диагностика */
+  .logview{margin:0;font:12px/1.55 ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-word;max-height:64vh;overflow-y:auto;color:#b0b0b6;}
+  .logview .lg-warn{color:var(--warn);} .logview .lg-error{color:var(--err);}
+  .diag-ic{width:18px;text-align:center;flex:none;font-weight:700;} .diag-ic.ok{color:var(--ok);} .diag-ic.no{color:#ff6b6b;}
+  .diag-det{color:var(--dim);font-size:12px;}
+  details summary{cursor:pointer;color:var(--mut);font-size:13px;}
+
+  /* статус-бар */
+  .status-bar{height:34px;flex:none;display:flex;align-items:center;gap:16px;padding:0 20px;
+    border-top:1px solid var(--line);font-size:12px;color:var(--mut);background:rgba(15,11,18,.6);}
+  .status-bar .st{display:flex;align-items:center;gap:6px;} .status-bar .d{width:7px;height:7px;border-radius:50%;background:#555;}
+  .status-bar .d.on{background:var(--ok);} .status-bar .ver{margin-left:auto;color:var(--dim);}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- САЙДБАР -->
+  <aside class="side" id="side">
+    <button class="hamb" onclick="toggleSide()" title="Свернуть меню"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></span></button>
+    <div class="brand"><span class="ico"><span class="logo"><svg viewBox="0 0 900 900"><path fill-rule="evenodd" fill="#fff" d="M-0.000,252.1000 L-0.000,0.000 L731.1000,0.000 L900.000,252.1000 L644.1000,535.756 L473.870,535.756 L732.024,252.849 L659.528,152.063 L159.136,152.063 L159.136,366.012 L-0.000,252.1000 ZM281.139,366.012 L445.000,366.012 L159.136,742.633 L659.528,742.633 L732.024,629.470 L694.892,564.047 L786.837,450.000 L900.000,596.1000 L900.000,655.000 L731.1000,899.1000 L64.000,899.1000 L-0.000,813.1000 L-0.000,698.1000 L281.139,366.012 Z"/></svg></span></span><span class="txt"><b>brsc</b> <span class="unit">/ music</span></span></div>
+    <nav class="nav scroll-area">
+      <a class="nav-item active" id="nav-home" onclick="showTab('home')"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span><span>Главная</span></a>
+      <a class="nav-item" id="nav-orders" onclick="showTab('orders')"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></span><span>Очередь</span></a>
+      <a class="nav-item" id="nav-twitch" onclick="showTab('twitch')"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span><span>Twitch</span></a>
+      <a class="nav-item" id="nav-commands" onclick="showTab('commands')"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></span><span>Команды</span></a>
+      <a class="nav-item" id="nav-responses" onclick="showTab('responses')"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span><span>Ответы</span></a>
+      <div class="nav-sep"></div>
+      <a class="nav-item" id="nav-settings" onclick="showTab('settings')"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span><span>Настройки</span></a>
+      <a class="nav-item" id="nav-overlay" onclick="showTab('overlay')"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span><span>Оверлей</span></a>
+      <a class="nav-item" id="nav-diag" onclick="showTab('diag')"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span><span>Диагностика</span></a>
+      <a class="nav-item" id="nav-log" onclick="showTab('log')"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg></span><span>Лог</span></a>
+    </nav>
+  </aside>
+
+  <!-- ОСНОВНАЯ ОБЛАСТЬ -->
+  <div class="main" id="main">
+    <div class="head">
+      <h1 id="pageTitle">Главная</h1>
+      <button class="srtoggle" id="srToggle" onclick="toggleSR()" title="Приём заказов" disabled><span id="srToggleTxt">Приём заказов</span><span class="sw"></span></button>
+      <!-- кнопки управления окном: no-drag дети drag-шапки (только в приложении) -->
+      <div class="wctl" id="wctl">
+        <button onclick="winctl.minimize()" title="Свернуть"><svg viewBox="0 0 12 12"><line x1="2.5" y1="6.5" x2="9.5" y2="6.5"/></svg></button>
+        <button onclick="winctl.maxtoggle()" title="Развернуть"><svg viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7"/></svg></button>
+        <button class="close" onclick="winctl.close()" title="Закрыть"><svg viewBox="0 0 12 12"><line x1="3" y1="3" x2="9" y2="9"/><line x1="9" y1="3" x2="3" y2="9"/></svg></button>
+      </div>
+    </div>
+    <div class="content scroll-area">
+
+      <!-- ГЛАВНАЯ -->
+      <div class="pane active" id="pane-home">
+        <div class="card">
+          <div class="np">
+            <img class="cover" id="cover" alt="" onerror="this.style.visibility='hidden'" />
+            <div class="np-info">
+              <div class="np-title" id="npTitle">—</div>
+              <div class="np-artist" id="npArtist"></div>
+              <div class="prog"><span class="tm" id="npCur">0:00</span><div class="bar"><div id="npBar"></div></div><span class="tm" id="npDur">0:00</span></div>
+              <div class="np-meta" id="npMeta"></div>
+            </div>
+            <div class="np-ctl">
+              <div class="np-transport">
+                <button class="icobtn" onclick="ctl('prev')" title="Предыдущий"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 20L9 12l10-8v16zM7 4v16H5V4h2z"/></svg></button>
+                <button class="icobtn play" onclick="ctl('toggle')" title="Плей/пауза"><span id="playIcon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></span></button>
+                <button class="icobtn" onclick="ctl('next')" title="Следующий"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 4l10 8-10 8V4zm12 0h2v16h-2z"/></svg></button>
+              </div>
+              <div class="np-actions">
+              <button class="actbtn like" id="likeBtn" onclick="toggleLike()" title="В любимое">
+                <svg class="ic-heart" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                <svg class="ic-heartoff" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/><path d="M12 4.8 L9.7 9 L13.2 12 L9.8 15.4 L13 18.4 L12 21.2"/></svg>
+              </button>
+              <div class="banwrap">
+                <button class="actbtn" onclick="toggleBan(event)" title="Забанить"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg></button>
+                <div class="banmenu" id="banmenu">
+                  <button onclick="banArtist()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>Забанить исполнителя</button>
+                  <button onclick="banTrack()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>Забанить трек</button>
+                </div>
+              </div>
+              <button class="actbtn copybtn" id="copyLinkBtn" onclick="copyTrackLink()" title="Скопировать ссылку на трек"><svg class="ic-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><svg class="ic-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card reqrow">
+          <input type="text" id="q" placeholder="Заказать: название, исполнитель или ссылка ЯМ…" autocomplete="off" />
+          <button class="primary" onclick="submitReq()">Заказать</button>
+        </div>
+        <div class="status" id="status" style="padding-left:4px"></div>
+
+        <div class="card">
+          <div class="sec-h"><h2>Дальше в плеере</h2><a onclick="showTab('orders')">Вся очередь →</a></div>
+          <ul id="queue"><li class="muted">загрузка…</li></ul>
+        </div>
+      </div>
+
+      <!-- ОЧЕРЕДЬ -->
+      <div class="pane" id="pane-orders">
+        <div class="card" id="pendingCard" style="display:none">
+          <h2>На премодерации <span id="pendingCount" class="muted"></span></h2>
+          <ul id="pending"></ul>
+        </div>
+        <div class="card">
+          <h2>Заказы зрителей</h2>
+          <ul id="orders"><li class="muted">пока никто ничего не заказал</li></ul>
+        </div>
+      </div>
+
+      <!-- TWITCH -->
+      <div class="pane" id="pane-twitch">
+        <div class="card">
+          <h2>Статус <span class="badge" id="tw-badge" style="display:none"></span></h2>
+          <div id="tw-status" class="muted">загрузка…</div>
+          <div id="tw-auth" style="display:none; margin-top:10px">
+            <div class="hint">Открыл браузер для входа (<b id="tw-auth-who"></b>). Нажми «Authorize» на странице Twitch.</div>
+            <div style="margin:6px 0" class="hint">Не открылся? <a id="tw-uri" href="#" target="_blank" rel="noopener">Открыть страницу входа вручную</a></div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Аккаунты</h2>
+          <div class="acct">
+            <div class="who"><b>Основной аккаунт</b> <span class="hint">— его чат читаем</span><br><span id="tw-main-login" class="muted">вход не выполнен</span><div id="tw-main-exp" class="hint" style="margin-top:2px"></div></div>
+            <div class="btns">
+              <button class="sm primary" id="tw-main-login-btn" onclick="loginTwitch('main')">Войти</button>
+              <button class="sm no" id="tw-main-logout-btn" onclick="logoutTwitch('main')">Выйти</button>
+            </div>
+          </div>
+          <div class="acct">
+            <div class="who"><b>Бот-аккаунт</b> <span class="hint">— необязательно, для ответов</span><br><span id="tw-bot-login" class="muted">вход не выполнен</span><div id="tw-bot-exp" class="hint" style="margin-top:2px"></div></div>
+            <div class="btns">
+              <button class="sm primary" id="tw-bot-login-btn" onclick="loginTwitch('bot')">Войти</button>
+              <button class="sm no" id="tw-bot-logout-btn" onclick="logoutTwitch('bot')">Выйти</button>
+            </div>
+          </div>
+          <div class="hint" style="margin:2px 0 10px">Вход открывается в браузере по умолчанию. Для <b>бота</b> войди под его аккаунтом — при необходимости смени аккаунт на twitch.tv или открой «страницу входа вручную» в приватном окне.</div>
+          <div class="status" id="twStatus" style="margin:0 0 10px"></div>
+          <div class="ovlist">
+            <div class="r"><span class="k">Отвечать в чат на команды</span><input type="checkbox" id="tw_announce" onchange="saveChatReply()" /></div>
+            <div class="r"><span class="k">От имени</span>
+              <select id="tw_replyWith" onchange="saveChatReply()"><option value="main">основного аккаунта</option><option value="bot">бота</option></select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- КОМАНДЫ -->
+      <div class="pane" id="pane-commands">
+        <div class="card">
+          <h2>Команды чата</h2>
+          <div class="hint" style="margin-bottom:10px">Кто может использовать: уровень зрителя и выше. Модератор и выше не подпадают под лимиты заказов.</div>
+          <div id="cmdList"><div class="muted">загрузка…</div></div>
+          <div style="margin-top:12px; display:flex; align-items:center; gap:10px">
+            <label class="hint" for="cmd_votes">Голосов для <b>!voteskip</b>:</label>
+            <input type="number" id="cmd_votes" min="1" style="width:90px" onchange="saveVotes()" />
+          </div>
+          <div class="status" id="cmdStatus"></div>
+        </div>
+      </div>
+
+      <!-- ОТВЕТЫ -->
+      <div class="pane" id="pane-responses">
+        <div class="card">
+          <h2>Ответы бота в чат</h2>
+          <details style="margin-bottom:12px">
+            <summary>Переменные для шаблонов (в фигурных скобках)</summary>
+            <div class="hint" style="margin-top:8px; line-height:1.9">{user}, {song}, {artist}, {title}, {pos}, {count}, {vol}, {cd}, {maxlength}, {maxreq}, {needed}, {votes}, {queue}, {commands}, {level}</div>
+          </details>
+          <div id="respList"><div class="muted">загрузка…</div></div>
+          <div style="margin-top:12px"><button class="primary" onclick="saveResponses()">Сохранить ответы</button> <span class="status" id="respStatus" style="display:inline"></span></div>
+        </div>
+      </div>
+
+      <!-- НАСТРОЙКИ -->
+      <div class="pane" id="pane-settings">
+        <div class="card">
+          <h2>Настройки заказов</h2>
+          <div class="grid">
+            <div class="chk full"><input type="checkbox" id="cfg_enabled" /><label for="cfg_enabled">Приём заказов включён</label></div>
+            <div class="chk full"><input type="checkbox" id="cfg_premoderation" /><label for="cfg_premoderation">Премодерация (заказ ждёт подтверждения)</label></div>
+            <div class="chk full"><input type="checkbox" id="cfg_allowExplicit" /><label for="cfg_allowExplicit">Разрешать explicit-треки</label></div>
+            <div class="chk full"><input type="checkbox" id="cfg_onlyWhenLive" /><label for="cfg_onlyWhenLive">Принимать заказы только когда стрим онлайн</label></div>
+            <label for="cfg_maxDurationSec">Лимит длины трека, сек</label>
+            <input type="number" id="cfg_maxDurationSec" min="0" placeholder="без лимита" />
+            <label for="cfg_maxPerUser">Заказов на зрителя</label>
+            <input type="number" id="cfg_maxPerUser" min="0" placeholder="без лимита" />
+            <label for="cfg_maxQueue">Всего заказов в очереди</label>
+            <input type="number" id="cfg_maxQueue" min="0" placeholder="без лимита" />
+            <label for="cfg_userCooldownSec">Кулдаун на зрителя, сек</label>
+            <input type="number" id="cfg_userCooldownSec" min="0" placeholder="0 = выкл" />
+            <label class="full" for="cfg_blockedArtists">Чёрный список артистов <span class="hint">(имена или id, через запятую)</span></label>
+            <input class="full" type="text" id="cfg_blockedArtists" />
+            <label class="full" for="cfg_blockedTrackIds">Чёрный список треков <span class="hint">(id, через запятую)</span></label>
+            <input class="full" type="text" id="cfg_blockedTrackIds" />
+            <label class="full" for="cfg_blockedUsers">Забаненные зрители <span class="hint">(ники, через запятую)</span></label>
+            <input class="full" type="text" id="cfg_blockedUsers" />
+            <div class="full" style="margin-top:6px"><button class="primary" onclick="saveConfig()">Сохранить</button> <span class="status" id="cfgStatus" style="display:inline"></span></div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Приложение</h2>
+          <div class="ovlist">
+            <div class="r"><span class="k">При закрытии окна (крестик)</span>
+              <span style="display:flex;align-items:center;gap:10px"><span class="status" id="appStatus" style="display:inline"></span><select id="app_closeMode" onchange="saveAppClose()"><option value="tray">Свернуть в трей</option><option value="close">Закрыть приложение</option></select></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ОВЕРЛЕЙ -->
+      <div class="pane" id="pane-overlay">
+        <div class="card">
+          <h2>Оверлей для OBS</h2>
+          <div class="hint" style="margin-bottom:12px">Добавьте в OBS как <b>Источник → Браузер</b>. Адрес фиксированный — размер и вид меняются здесь, в OBS ничего править не нужно.</div>
+          <div style="background:#141518; border:1px solid var(--line); border-radius:12px; padding:16px; overflow:auto; display:flex; justify-content:center; min-height:120px">
+            <iframe id="ov_preview" title="Превью оверлея" scrolling="no" style="border:0; background:transparent"></iframe>
+          </div>
+          <div class="ovlist">
+            <div class="r"><span class="k">Размер</span>
+              <select id="ov_size" onchange="saveAppearance()"><option value="large">Большой</option><option value="regular">Средний</option><option value="slim">Строка</option><option value="square">Квадрат</option></select>
+            </div>
+            <div class="r"><span class="k">В слоте обложки</span>
+              <select id="ov_media" onchange="saveAppearance()" title="Видеошот — короткое видео трека (как Canvas у Spotify). Если у трека его нет, показывается обложка."><option value="cover">Обложка</option><option value="videoshot">Видеошот</option></select>
+            </div>
+            <div class="r"><span class="k">Стиль плашки</span>
+              <select id="ov_style" onchange="saveAppearance()" title="Матовое стекло: полупрозрачная молочная плашка с зерном, стрим просвечивает диффузным цветом. В OBS без размытия фона, в браузере/панели блюр настоящий."><option value="plain">Обычный</option><option value="glass">Матовое стекло</option></select>
+            </div>
+          </div>
+          <div class="ov-url">
+            <input type="text" id="ov_url" readonly onclick="this.select()" />
+            <button onclick="copyOverlayUrl()">Копировать</button>
+          </div>
+          <div class="hint" id="ov_dims" style="margin-top:8px"></div>
+          <div class="status" id="ovStatus"></div>
+        </div>
+        <div class="card">
+          <h2>Порт</h2>
+          <div class="ovlist">
+            <div class="r"><span class="k">Порт панели / оверлея</span>
+              <span class="ov-port"><input type="number" id="ov_port" min="1" max="65535" placeholder="8620" /><button class="sm" onclick="savePort()">Сохранить</button></span>
+            </div>
+          </div>
+          <div class="hint" style="margin-top:8px">Фиксирует адрес, чтобы он не «гулял». Смена применится после перезапуска приложения. <span class="status" id="ovPortStatus" style="display:inline"></span></div>
+        </div>
+      </div>
+
+      <!-- ДИАГНОСТИКА -->
+      <div class="pane" id="pane-diag">
+        <div class="card">
+          <h2>Диагностика</h2>
+          <div id="diag-version" class="muted">версия клиента: —</div>
+          <div id="diag-banner" style="display:none; margin:10px 0; padding:9px 11px; border-radius:12px; font-size:13px"></div>
+          <div style="margin:12px 0; display:flex; gap:8px; flex-wrap:wrap">
+            <button class="primary" onclick="loadDiag()">Проверить</button>
+            <button onclick="runDeep()">Глубокая проверка (вставит и уберёт трек)</button>
+            <span class="status" id="diagStatus" style="display:inline; align-self:center"></span>
+          </div>
+          <ul id="diag-list"><li class="muted">нажми «Проверить»</li></ul>
+          <div id="deep-wrap" style="display:none; margin-top:14px"><h2>Глубокая проверка (реальная вставка)</h2><ul id="deep-list"></ul></div>
+          <div class="hint" style="margin-top:12px">Диагностика полезна после обновления клиента ЯМ: показывает, что из внутренних точек ещё работает.</div>
+        </div>
+      </div>
+
+      <!-- ЛОГ -->
+      <div class="pane" id="pane-log">
+        <div class="card">
+          <h2>Лог приложения <span class="hint">(также в файлах logs/)</span></h2>
+          <pre id="log" class="logview">загрузка…</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- статус-бар -->
+    <div class="status-bar">
+      <span class="st"><span class="d" id="st-ym"></span>ЯМ</span>
+      <span class="st"><span class="d" id="st-tw"></span>Twitch-чат</span>
+      <span class="st"><span class="d" id="st-bot"></span>Бот</span>
+      <span class="st"><span class="d on" id="st-srv"></span>Сервер: <span id="st-port">8620</span></span>
+      <span class="ver">brsc / music · v0.1</span>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const fmt = (s) => { s = Math.max(0, Math.floor(s || 0)); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); };
+const hhmm = (iso) => { try { const d = new Date(iso); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); } catch { return ''; } };
+const PLAY_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+const PAUSE_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>';
+const TABS = ['home','orders','twitch','commands','responses','settings','overlay','diag','log'];
+const PAGE_TITLES = { home:'Главная', orders:'Очередь', twitch:'Twitch', commands:'Команды', responses:'Ответы', settings:'Настройки', overlay:'Оверлей', diag:'Диагностика', log:'Лог' };
+let cfgLoaded = false;
+
+async function api(path, body) {
+  const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
+  return (await fetch(path, opt)).json();
+}
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+function trackLabel(r) { return esc((r.title || ('трек ' + r.id)) + (r.artist ? ' — ' + r.artist : '')); }
+function setStatus(id, t, cls) {
+  const s = $(id); if (!s) return; s.textContent = t; s.className = 'status ' + (cls || '');
+  if (s._t) clearTimeout(s._t);
+  if (t) s._t = setTimeout(() => { s.textContent = ''; s.className = 'status'; }, 4000);
+}
+
+function showTab(name) {
+  for (const n of TABS) { $('pane-' + n).classList.toggle('active', n === name); $('nav-' + n).classList.toggle('active', n === name); }
+  $('pageTitle').textContent = PAGE_TITLES[name] || '';
+  if ((name === 'commands' || name === 'responses') && !botLoaded) loadBot();
+  if (name === 'log') refreshLog();
+  if (name === 'overlay') { if (!overlayCfgLoaded) loadOverlayCfg(); renderOverlayPreview(); }
+  if (name === 'settings' && !appSettingsLoaded) loadAppSettings();
+  if (name === 'diag' && !diagLoaded) loadDiag();
+}
+
+// --- сайдбар: сворачивание (запоминаем) ---
+function toggleSide() {
+  const c = $('side').classList.toggle('collapsed');
+  try { localStorage.setItem('brsc.collapsed', c ? '1' : '0'); } catch (e) {}
+}
+
+// --- оверлейные скроллбары с фейдом ---
+function initSB(scroller, host) {
+  if (!scroller || !host) return;
+  const thumb = document.createElement('div'); thumb.className = 'sb-thumb'; host.appendChild(thumb);
+  let hideT;
+  function update() {
+    const vh = scroller.clientHeight, sh = scroller.scrollHeight, st = scroller.scrollTop;
+    if (sh <= vh + 1) { thumb.style.height = '0'; return; }
+    const th = Math.max(28, vh / sh * vh);
+    const tt = scroller.offsetTop + (st / (sh - vh)) * (vh - th);
+    thumb.style.height = th + 'px'; thumb.style.transform = 'translateY(' + tt + 'px)';
+  }
+  scroller.addEventListener('scroll', () => { update(); thumb.classList.add('on'); clearTimeout(hideT); hideT = setTimeout(() => thumb.classList.remove('on'), 900); });
+  window.addEventListener('resize', update);
+  try { new ResizeObserver(update).observe(scroller); } catch (e) {}
+  update();
+}
+
+// --- лайк / бан ---
+function toggleBan(e) { e.stopPropagation(); $('banmenu').classList.toggle('open'); }
+document.addEventListener('click', () => { const m = $('banmenu'); if (m) m.classList.remove('open'); });
+async function toggleLike() {
+  const btn = $('likeBtn');
+  const r = await api('/api/like', {});
+  if (r && r.ok) btn.classList.toggle('liked', !!r.liked);
+  else setStatus('status', (r && r.error) ? ('лайк: ' + r.error) : 'не удалось поставить лайк', 'err');
+}
+let _copyTimer = null;
+async function copyTrackLink() {
+  const id = (window._lastState || {}).currentId;
+  if (!id) return;
+  const url = 'https://music.yandex.ru/track/' + id;
+  let ok = false;
+  try { await navigator.clipboard.writeText(url); ok = true; }
+  catch (e) {
+    try {
+      const ta = document.createElement('textarea'); ta.value = url;
+      ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
+      ok = document.execCommand('copy'); document.body.removeChild(ta);
+    } catch (e2) { ok = false; }
+  }
+  if (!ok) return;
+  const btn = $('copyLinkBtn');
+  btn.classList.add('copied');
+  clearTimeout(_copyTimer);
+  _copyTimer = setTimeout(() => btn.classList.remove('copied'), 1300);
+}
+async function banArtist() {
+  $('banmenu').classList.remove('open');
+  const s = window._lastState || {}, c = window._lastConfig; if (!s.artist || !c) return;
+  const name = String(s.artist).split(',')[0].trim();
+  const arr = (c.blockedArtists || []).slice();
+  if (!arr.map((x) => x.toLowerCase()).includes(name.toLowerCase())) arr.push(name);
+  const r = await api('/api/config', { ...c, blockedArtists: arr });
+  if (r.ok) { window._lastConfig = r.config; fillConfig(r.config); setStatus('status', '✓ исполнитель забанен: ' + name + ', пропускаю', 'ok'); ctl('next'); }
+}
+async function banTrack() {
+  $('banmenu').classList.remove('open');
+  const s = window._lastState || {}, c = window._lastConfig; if (!s.currentId || !c) return;
+  const arr = (c.blockedTrackIds || []).slice();
+  if (!arr.includes(String(s.currentId))) arr.push(String(s.currentId));
+  const r = await api('/api/config', { ...c, blockedTrackIds: arr });
+  if (r.ok) { window._lastConfig = r.config; fillConfig(r.config); setStatus('status', '✓ трек забанен, пропускаю', 'ok'); ctl('next'); }
+}
+
+// --- оверлей ---
+let overlayCfgLoaded = false;
+const OV_CANVAS = { w: 580, h: 320 };
+function renderOverlayPreview() {
+  const fr = $('ov_preview');
+  fr.style.width = OV_CANVAS.w + 'px'; fr.style.height = OV_CANVAS.h + 'px';
+  if (!fr.dataset.ready) { fr.src = location.origin + '/overlay?bg=grid'; fr.dataset.ready = '1'; }
+  $('ov_url').value = location.origin + '/overlay';
+  $('ov_dims').textContent = 'Размер слоя в OBS: ' + OV_CANVAS.w + ' × ' + OV_CANVAS.h + ' px — задаётся один раз, под любой размер виджета. Виджет по центру, фон прозрачный.';
+}
+async function loadOverlayCfg() {
+  const d = await api('/api/appconfig'); if (!d.ok) return;
+  $('ov_size').value = d.app.overlay.size; $('ov_media').value = d.app.overlay.media;
+  $('ov_style').value = d.app.overlay.glass ? 'glass' : 'plain'; $('ov_port').value = d.app.port;
+  overlayCfgLoaded = true;
+}
+let appSettingsLoaded = false;
+async function loadAppSettings() {
+  const d = await api('/api/appconfig'); if (!d.ok) return;
+  $('app_closeMode').value = (d.app.closeToTray === false) ? 'close' : 'tray';
+  appSettingsLoaded = true;
+}
+async function saveAppClose() {
+  const r = await api('/api/appconfig', { closeToTray: $('app_closeMode').value === 'tray' });
+  if (r.ok) setStatus('appStatus', '✓ сохранено', 'ok'); else setStatus('appStatus', '✗ ошибка', 'err');
+}
+async function saveAppearance() {
+  const r = await api('/api/appconfig', { overlay: { size: $('ov_size').value, media: $('ov_media').value, glass: $('ov_style').value === 'glass' } });
+  if (r.ok) setStatus('ovStatus', '✓ сохранено — оверлей обновится через секунду', 'ok'); else setStatus('ovStatus', '✗ ошибка', 'err');
+}
+async function savePort() {
+  const port = Number($('ov_port').value);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) { setStatus('ovPortStatus', 'порт 1–65535', 'err'); return; }
+  const r = await api('/api/appconfig', { port });
+  if (r.ok) setStatus('ovPortStatus', r.portChanged ? '✓ сохранено — применится после перезапуска' : '✓ сохранено', 'ok'); else setStatus('ovPortStatus', '✗ ошибка', 'err');
+}
+function copyOverlayUrl() {
+  const v = $('ov_url').value;
+  try { navigator.clipboard.writeText(v); setStatus('ovStatus', '✓ ссылка скопирована', 'ok'); }
+  catch (e) { $('ov_url').select(); document.execCommand('copy'); setStatus('ovStatus', '✓ скопировано', 'ok'); }
+}
+
+// --- команды и ответы бота ---
+let botLoaded = false;
+const CMD_LABELS = { sr:'Заказать трек', song:'Текущий трек', next:'Следующий трек', queue:'Очередь', pos:'Позиция заказа', remove:'Убрать свой заказ', voteskip:'Голосование за пропуск', cmds:'Список команд', vol:'Громкость', skip:'Пропустить трек', play:'Воспроизвести', pause:'Пауза', bansong:'В ЧС + пропуск', togglesr:'Вкл/выкл приём заказов' };
+const LEVELS = [[0,'Все'],[1,'Фолловеры+'],[2,'Подписчики+'],[3,'VIP+'],[4,'Модераторы+'],[5,'Только стример']];
+const RESP_LABELS = {
+  srAdded:'Заказ добавлен', srPending:'Заказ на модерацию', srDuplicate:'Трек уже в очереди', srTooLong:'Трек длиннее лимита', srMaxUser:'Лимит заказов на зрителя', srMaxQueue:'Очередь заполнена',
+  srBlockedArtist:'Исполнитель заблокирован', srBlockedTrack:'Трек заблокирован', srBlockedUser:'Зритель заблокирован', srExplicit:'Explicit запрещён', srCooldown:'Кулдаун зрителя', srNotFound:'Трек не найден',
+  srEmpty:'Пустой запрос', srDisabled:'Заказы выключены', srOffline:'Стрим оффлайн', srError:'Ошибка заказа', offline:'Стрим оффлайн (любая команда)', noPermission:'Недостаточно прав', song:'Текущий трек', songNone:'Ничего не играет',
+  next:'Следующий трек', nextNone:'Очередь пуста (next)', queue:'Очередь', queueNone:'Очередь пуста', pos:'Позиция заказа', posNone:'Нет заказов (pos)', removed:'Заказ убран', removeNone:'Нет заказов (remove)',
+  skipped:'Трек пропущен', voteskipVote:'Голос засчитан', voteskipDone:'Голосование прошло', togglesrOn:'Заказы включены', togglesrOff:'Заказы выключены', vol:'Громкость (чтение)', volSet:'Громкость (установка)',
+  play:'Воспроизведение', pause:'Пауза', bansong:'Трек в ЧС', cmds:'Список команд',
+};
+async function loadBot() {
+  const d = await api('/api/bot'); if (!d.ok) return;
+  renderCommands(d.bot); renderResponses(d.bot); $('cmd_votes').value = d.bot.votesNeeded; botLoaded = true;
+}
+function renderCommands(bot) {
+  const order = ['sr','song','next','queue','pos','remove','voteskip','cmds','vol','skip','play','pause','bansong','togglesr'];
+  const ids = order.filter((id) => bot.commands[id]);
+  $('cmdList').innerHTML = ids.map((id) => {
+    const c = bot.commands[id];
+    const opts = LEVELS.map(([v, t]) => '<option value="' + v + '"' + (c.minLevel === v ? ' selected' : '') + '>' + t + '</option>').join('');
+    return '<div class="cmd"><div class="cmd-name">' + esc(CMD_LABELS[id] || id) + '</div>' +
+      '<input type="text" value="' + esc(c.trigger) + '" onchange="saveCommand(\'' + id + '\')" id="cmdtr_' + id + '" />' +
+      '<label class="chk"><input type="checkbox" ' + (c.enabled ? 'checked' : '') + ' onchange="saveCommand(\'' + id + '\')" id="cmden_' + id + '" /> вкл</label>' +
+      '<select onchange="saveCommand(\'' + id + '\')" id="cmdlv_' + id + '">' + opts + '</select></div>';
+  }).join('');
+}
+async function saveCommand(id) {
+  const r = await api('/api/bot/command', { id, trigger: $('cmdtr_' + id).value.trim() || ('!' + id), enabled: $('cmden_' + id).checked, minLevel: Number($('cmdlv_' + id).value) });
+  if (r.ok) setStatus('cmdStatus', '✓ сохранено', 'ok');
+}
+async function saveVotes() { const r = await api('/api/bot/votes', { votesNeeded: Number($('cmd_votes').value) }); if (r.ok) setStatus('cmdStatus', '✓ сохранено', 'ok'); }
+function renderResponses(bot) {
+  const keys = Object.keys(RESP_LABELS).filter((k) => k in bot.responses);
+  $('respList').innerHTML = keys.map((k) => '<div class="resp"><label>' + esc(RESP_LABELS[k]) + '</label><input type="text" id="resp_' + k + '" value="' + esc(bot.responses[k]) + '" /></div>').join('');
+}
+async function saveResponses() {
+  const responses = {}; for (const k of Object.keys(RESP_LABELS)) { const el = $('resp_' + k); if (el) responses[k] = el.value; }
+  const r = await api('/api/bot/responses', { responses });
+  if (r.ok) setStatus('respStatus', '✓ сохранено', 'ok'); else setStatus('respStatus', '✗ ошибка', 'err');
+}
+
+async function submitReq() {
+  const q = $('q').value.trim(); if (!q) return;
+  setStatus('status', 'ищу и ставлю в очередь…', '');
+  const r = await api('/api/request', { query: q, user: 'panel' });
+  if (r.ok) {
+    const t = r.request.title ? (r.request.title + (r.request.artist ? ' — ' + r.request.artist : '')) : ('трек ' + r.request.id);
+    setStatus('status', (r.pending ? '⏳ на премодерации: ' : '✓ поставлено следующим: ') + t, 'ok');
+    $('q').value = ''; refresh();
+  } else setStatus('status', '✗ ' + r.error, 'err');
+}
+async function ctl(a) { await api('/api/control', { action: a }); setTimeout(refresh, 300); }
+async function cancelReq(id) { await api('/api/cancel', { id }); refresh(); }
+async function approveReq(id) { await api('/api/approve', { id }); refresh(); }
+async function rejectReq(id) { await api('/api/reject', { id }); refresh(); }
+$('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitReq(); });
+
+const STATUS_RU = { queued:'в очереди', played:'сыгран', pending:'на модерации', cancelled:'отменён', rejected:'отклонён' };
+const badge = (st) => '<span class="badge b-' + st + '">' + (STATUS_RU[st] || st) + '</span>';
+
+function renderQueue(q) {
+  const ul = $('queue');
+  if (!q || !q.items || !q.items.length) { ul.innerHTML = '<li class="muted">пусто</li>'; return; }
+  ul.innerHTML = q.items.map((it) => {
+    const title = it.title || ('трек ' + (it.id || '?'));
+    const label = title + (it.artist ? ' — ' + it.artist : '');
+    return '<li><span class="q-idx ' + (it.isCurrent ? 'q-cur' : '') + '">' + (it.isCurrent ? '▶' : '') + '</span>' +
+      '<span class="q-title ' + (it.isCurrent ? 'q-cur' : '') + '">' + esc(label) + '</span>' +
+      (it.by ? '<span class="req-user">заказал ' + esc(it.by) + '</span>' : '') + '</li>';
+  }).join('');
+}
+function renderOrders(list) {
+  const active = (list || []).filter((r) => r.status === 'queued' || r.status === 'pending');
+  const ul = $('orders');
+  if (!active.length) { ul.innerHTML = '<li class="muted">пока никто ничего не заказал</li>'; return; }
+  ul.innerHTML = active.map((r) => '<li><span class="q-title">' + trackLabel(r) + '</span><span class="req-user">' + esc(r.user || '') + '</span>' + badge(r.status) +
+    (r.status === 'queued' ? '<button class="sm" onclick="cancelReq(\'' + r.id + '\')">убрать</button>' : '') + '</li>').join('');
+}
+function renderLog(lines) {
+  const el = $('log');
+  if (!lines || !lines.length) { el.textContent = 'лог пуст'; return; }
+  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  el.innerHTML = lines.map((l) => { const cls = /\] \[ERROR\]/.test(l) ? 'lg-error' : /\] \[WARN\]/.test(l) ? 'lg-warn' : ''; return '<span class="' + cls + '">' + esc(l) + '</span>'; }).join('\n');
+  if (atBottom) el.scrollTop = el.scrollHeight;
+}
+async function refreshLog() { try { const r = await api('/api/logs'); if (r.ok) renderLog(r.lines); } catch (e) {} }
+
+// --- диагностика ---
+let diagLoaded = false;
+const diagIcon = (ok) => '<span class="diag-ic ' + (ok ? 'ok' : 'no') + '">' + (ok ? '✓' : '✗') + '</span>';
+function renderChecks(el, checks) {
+  el.innerHTML = (checks || []).map((c) => '<li>' + diagIcon(c.ok) + '<span class="q-title">' + esc(c.name) + '</span>' + (c.detail ? '<span class="diag-det">' + esc(c.detail) + '</span>' : '') + '</li>').join('');
+}
+async function loadDiag() {
+  setStatus('diagStatus', 'проверяю…', '');
+  const d = await api('/api/diagnostics');
+  if (!d.ok) { setStatus('diagStatus', '✗ ' + (d.error || 'ошибка'), 'err'); return; }
+  const r = d.diag;
+  $('diag-version').innerHTML = 'Версия клиента ЯМ: <b>' + esc(r.version || '?') + '</b>' + (r.storedVersion ? ' · последняя проверенная: ' + esc(r.storedVersion) : '');
+  const b = $('diag-banner');
+  if (r.versionChanged) { b.style.display = ''; b.style.background = '#3a2e10'; b.style.color = '#ffcc00'; b.textContent = '⚠ Клиент обновился (' + r.storedVersion + ' → ' + r.version + '). Проверь, что всё работает.'; }
+  else if (r.ok) { b.style.display = ''; b.style.background = '#14481f'; b.style.color = '#cfefd4'; b.textContent = '✓ Все проверки пройдены на версии ' + r.version + '.'; }
+  else { b.style.display = ''; b.style.background = '#3a1a1f'; b.style.color = '#f2a3ab'; b.textContent = '✗ Проблемы: ' + (r.total - r.passed) + ' из ' + r.total + ' проверок не прошли.'; }
+  renderChecks($('diag-list'), r.checks);
+  setStatus('diagStatus', 'пройдено ' + r.passed + '/' + r.total, r.passed === r.total ? 'ok' : 'err');
+  diagLoaded = true;
+}
+async function runDeep() {
+  setStatus('diagStatus', 'глубокая проверка (вставляю трек)…', '');
+  const d = await api('/api/diagnostics/deep', {});
+  $('deep-wrap').style.display = '';
+  if (!d.ok) { $('deep-list').innerHTML = '<li class="muted">ошибка: ' + esc(d.error || '') + '</li>'; setStatus('diagStatus', '✗ ошибка', 'err'); return; }
+  renderChecks($('deep-list'), d.deep.steps);
+  setStatus('diagStatus', d.deep.ok ? '✓ вставка/удаление работают' : '✗ есть проблемы', d.deep.ok ? 'ok' : 'err');
+}
+function renderPending(list) {
+  const card = $('pendingCard'), ul = $('pending');
+  if (!list || !list.length) { card.style.display = 'none'; return; }
+  card.style.display = ''; $('pendingCount').textContent = list.length;
+  ul.innerHTML = list.map((r) => '<li><span class="q-title">' + trackLabel(r) + '</span><span class="req-user">' + esc(r.user || '') + '</span>' +
+    '<button class="sm ok" onclick="approveReq(\'' + r.id + '\')">✓</button><button class="sm no" onclick="rejectReq(\'' + r.id + '\')">✗</button></li>').join('');
+}
+
+function fillConfig(c) {
+  if (!c) return;
+  $('cfg_enabled').checked = !!c.enabled; $('cfg_premoderation').checked = !!c.premoderation;
+  $('cfg_allowExplicit').checked = !!c.allowExplicit; $('cfg_onlyWhenLive').checked = !!c.onlyWhenLive;
+  $('cfg_maxDurationSec').value = c.maxDurationSec == null ? '' : c.maxDurationSec;
+  $('cfg_maxPerUser').value = c.maxPerUser == null ? '' : c.maxPerUser;
+  $('cfg_maxQueue').value = c.maxQueue == null ? '' : c.maxQueue;
+  $('cfg_userCooldownSec').value = c.userCooldownSec == null ? '' : c.userCooldownSec;
+  $('cfg_blockedArtists').value = (c.blockedArtists || []).join(', ');
+  $('cfg_blockedTrackIds').value = (c.blockedTrackIds || []).join(', ');
+  $('cfg_blockedUsers').value = (c.blockedUsers || []).join(', ');
+}
+const numOrNull = (id) => { const v = $(id).value.trim(); return v === '' ? null : Number(v); };
+const listOf = (id) => $(id).value.split(',').map((s) => s.trim()).filter(Boolean);
+async function saveConfig() {
+  const body = { enabled: $('cfg_enabled').checked, premoderation: $('cfg_premoderation').checked, allowExplicit: $('cfg_allowExplicit').checked, onlyWhenLive: $('cfg_onlyWhenLive').checked,
+    maxDurationSec: numOrNull('cfg_maxDurationSec'), maxPerUser: numOrNull('cfg_maxPerUser'), maxQueue: numOrNull('cfg_maxQueue'), userCooldownSec: numOrNull('cfg_userCooldownSec'),
+    blockedArtists: listOf('cfg_blockedArtists'), blockedTrackIds: listOf('cfg_blockedTrackIds'), blockedUsers: listOf('cfg_blockedUsers') };
+  const r = await api('/api/config', body);
+  if (r.ok) { fillConfig(r.config); window._lastConfig = r.config; renderSR(r.config); setStatus('cfgStatus', '✓ сохранено', 'ok'); } else setStatus('cfgStatus', '✗ ошибка', 'err');
+}
+
+// быстрый переключатель приёма заказов в шапке
+let srBusy = false;
+function renderSR(c) {
+  if (!c || srBusy) return;
+  const b = $('srToggle'); b.disabled = false;
+  b.classList.toggle('on', !!c.enabled);
+  $('srToggleTxt').textContent = c.enabled ? 'Заказы включены' : 'Заказы выключены';
+}
+async function toggleSR() {
+  const c = window._lastConfig; if (!c || srBusy) return;
+  srBusy = true;
+  try {
+    const r = await api('/api/config', { enabled: !c.enabled });
+    if (r.ok) { window._lastConfig = r.config; $('cfg_enabled').checked = !!r.config.enabled; }
+  } catch (e) {}
+  srBusy = false; renderSR(window._lastConfig);
+}
+
+let twCfgLoaded = false;
+// показать срок действия токена под аккаунтом (с предупреждением, если скоро истечёт)
+function setExp(el, ms) {
+  if (!el) return;
+  if (!ms) { el.textContent = ''; el.style.color = ''; return; }
+  const left = ms - Date.now(), days = left / 86400000;
+  const dt = new Date(ms).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  if (left <= 0) { el.textContent = '⚠ токен истёк — войди заново'; el.style.color = '#ff6b6b'; }
+  else if (days < 3) { el.textContent = '⚠ токен действует до ' + dt + ' — скоро истечёт'; el.style.color = '#ffb454'; }
+  else { el.textContent = 'токен действует до ' + dt; el.style.color = ''; }
+}
+function renderTwitch(tw) {
+  if (!tw) return;
+  const b = $('tw-badge'), st = $('tw-status');
+  const whoRu = (w) => w === 'bot' ? 'бот' : 'основной';
+  if (tw.connected) { b.style.display = ''; b.className = 'badge b-queued'; b.textContent = 'подключено'; st.textContent = 'Читаю чат ' + tw.channel + ', отвечаю как ' + (tw.activeLogin || '—') + '.'; }
+  else if (tw.awaitingAuth) { b.style.display = ''; b.className = 'badge b-pending'; b.textContent = 'ожидает входа'; st.textContent = 'Жду подтверждения входа (' + whoRu(tw.awaitingWhich) + ')…'; }
+  else if (tw.enabled && tw.configured) { b.style.display = ''; b.className = 'badge b-rejected'; b.textContent = 'не подключено'; st.textContent = tw.error ? ('Ошибка: ' + tw.error) : 'Подключаюсь…'; }
+  else { b.style.display = 'none'; st.textContent = tw.error ? ('Ошибка: ' + tw.error) : 'Не подключено. Укажите Client ID, войдите аккаунтом.'; }
+  const mainEl = $('tw-main-login'), botEl = $('tw-bot-login');
+  mainEl.textContent = tw.mainLogin ? ('вошёл: ' + tw.mainLogin) : 'вход не выполнен'; mainEl.className = tw.mainLogin ? 'logged' : 'muted';
+  botEl.textContent = tw.botLogin ? ('вошёл: ' + tw.botLogin) : 'вход не выполнен'; botEl.className = tw.botLogin ? 'logged' : 'muted';
+  setExp($('tw-main-exp'), tw.mainLogin ? tw.mainExpiresAt : 0);
+  setExp($('tw-bot-exp'), tw.botLogin ? tw.botExpiresAt : 0);
+  $('tw-main-login-btn').style.display = tw.mainLogin ? 'none' : ''; $('tw-main-logout-btn').style.display = tw.mainLogin ? '' : 'none';
+  $('tw-bot-login-btn').style.display = tw.botLogin ? 'none' : ''; $('tw-bot-logout-btn').style.display = tw.botLogin ? '' : 'none';
+  const auth = $('tw-auth');
+  if (tw.awaitingAuth) {
+    auth.style.display = '';
+    $('tw-auth-who').textContent = tw.awaitingWhich === 'bot' ? 'бот-аккаунт' : 'основной аккаунт';
+    if (tw.authUrl) $('tw-uri').href = tw.authUrl;
+  } else auth.style.display = 'none';
+  if (!twCfgLoaded) { $('tw_announce').checked = !!tw.announce; $('tw_replyWith').value = tw.replyWith || 'main'; twCfgLoaded = true; }
+  updateReplyDep();
+}
+async function saveChatReply() { const r = await api('/api/twitch/config', { announce: $('tw_announce').checked, replyWith: $('tw_replyWith').value }); updateReplyDep(); if (r.ok) renderTwitch(r.twitch); }
+function updateReplyDep() { const on = $('tw_announce').checked, sel = $('tw_replyWith'); sel.disabled = !on; const row = sel.closest('.r'); if (row) row.style.opacity = on ? '' : '.5'; }
+async function loginTwitch(which) {
+  setStatus('twStatus', 'открываю браузер для входа (' + (which === 'bot' ? 'бот' : 'основной') + ')…', '');
+  const r = await api('/api/twitch/login', { which });
+  if (r.ok) {
+    setStatus('twStatus', 'подтвердите вход в открывшемся браузере', 'ok');
+    $('tw-auth').style.display = '';
+    $('tw-auth-who').textContent = which === 'bot' ? 'бот-аккаунт' : 'основной аккаунт';
+    if (r.authUrl) $('tw-uri').href = r.authUrl;
+  } else setStatus('twStatus', '✗ ' + r.error, 'err');
+}
+async function logoutTwitch(which) { const r = await api('/api/twitch/logout', { which }); if (r.ok) { setStatus('twStatus', 'выход выполнен (' + (which === 'bot' ? 'бот' : 'основной') + ')', 'ok'); renderTwitch(r.twitch); } }
+
+async function refresh() {
+  try {
+    const d = await api('/api/state');
+    const on = d.connected && d.state && !d.state.error;
+    const s = d.state || {}; window._lastState = s;
+    $('npTitle').textContent = s.title || '—'; $('npArtist').textContent = s.artist || '';
+    const cov = $('cover'); if (s.cover) { cov.src = s.cover; cov.style.visibility = 'visible'; } else cov.style.visibility = 'hidden';
+    // подпись под артистом — только если текущий трек это заказ (иначе ничего)
+    let curBy = '';
+    if (d.queue && d.queue.items) { const cur = d.queue.items.find((i) => i.isCurrent); if (cur && cur.by) curBy = cur.by; }
+    $('npMeta').textContent = curBy ? ('заказал ' + curBy) : '';
+    $('npCur').textContent = fmt(s.position); $('npDur').textContent = s.duration ? fmt(s.duration) : '0:00';
+    $('npBar').style.width = (s.duration ? Math.min(100, 100 * (s.position || 0) / s.duration) : 0) + '%';
+    $('playIcon').innerHTML = (s.status === 'playing' || s.playbackState === 'playing') ? PAUSE_SVG : PLAY_SVG;
+    const likeBtn = $('likeBtn'); const liked = s.liked;
+    likeBtn.classList.toggle('liked', liked === true);
+    likeBtn.disabled = (liked === null || liked === undefined);
+    likeBtn.style.opacity = likeBtn.disabled ? '.45' : '';
+    likeBtn.title = (liked === true) ? 'Убрать из любимого' : 'В любимое';
+    $('copyLinkBtn').disabled = !s.currentId; $('copyLinkBtn').style.opacity = s.currentId ? '' : '.45';
+    const tw = d.twitch || {};
+    $('st-ym').className = 'd' + (on ? ' on' : '');
+    $('st-tw').className = 'd' + (tw.connected ? ' on' : '');
+    $('st-bot').className = 'd' + (tw.botLogin ? ' on' : '');
+    renderPending(d.pending); renderOrders(d.requests); renderQueue(d.queue);
+    if ($('pane-log').classList.contains('active')) refreshLog();
+    renderTwitch(d.twitch);
+    // конфиг обновляем всегда, кроме случая, когда открыта вкладка Настройки (чтобы не затирать правки)
+    if (d.config && !srBusy) { window._lastConfig = d.config; renderSR(d.config); if (!$('pane-settings').classList.contains('active')) { fillConfig(d.config); cfgLoaded = true; } }
+  } catch (e) {}
+}
+
+// --- инициализация ---
+try { if (localStorage.getItem('brsc.collapsed') === '1') $('side').classList.add('collapsed'); } catch (e) {}
+if (window.winctl) document.body.classList.add('has-titlebar'); // шапка окна — только в приложении
+$('st-port').textContent = location.port || '8620';
+initSB(document.querySelector('.content.scroll-area'), $('main'));
+initSB(document.querySelector('.nav.scroll-area'), $('side'));
+if (location.hash) { const t = location.hash.slice(1); if (TABS.includes(t)) showTab(t); }
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>

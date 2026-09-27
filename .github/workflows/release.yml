@@ -1,0 +1,63 @@
+# Сборка portable .exe на GitHub и выкладка в Releases.
+#
+# Выпуск версии:
+#   1. поднять "version" в package.json (например 0.2.0) и закоммитить
+#   2. git tag v0.2.0 && git push && git push --tags
+#   3. через ~5 минут в Releases появится черновик с exe — проверить и нажать Publish
+#
+# Ручной запуск (Actions → Release → Run workflow) просто собирает exe
+# и кладёт его в артефакты запуска, без релиза — для проверки сборки.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write # создать релиз и прикрепить exe
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Тег совпадает с версией в package.json
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          v="v$(node -p "require('./package.json').version")"
+          if [ "$v" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Тег $GITHUB_REF_NAME не совпадает с версией в package.json ($v)"
+            exit 1
+          fi
+
+      - run: npm run typecheck
+
+      - run: npm run build:backend
+
+      # --publish never: exe в релиз кладёт шаг ниже, electron-builder сам ничего не публикует
+      - run: npx electron-builder --win portable --publish never
+
+      - name: Черновик релиза с exe
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v3
+        with:
+          draft: true
+          generate_release_notes: true
+          files: release/*.exe
+
+      - name: exe в артефакты (ручной запуск)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v7
+        with:
+          name: brsc-music-portable
+          path: release/*.exe

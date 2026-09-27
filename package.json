@@ -1,0 +1,49 @@
+{
+  "name": "brsc-music",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Заказ треков зрителями для Яндекс Музыки (десктоп) через управление плеером по CDP — brsc / music",
+  "author": "brsc",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "app": "electron .",
+    "start": "node src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "build:backend": "esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=dist/backend.cjs",
+    "dist": "npm run build:backend && electron-builder --win portable"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "esbuild": "^0.24.0",
+    "electron": "^32.2.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.6.0"
+  },
+  "build": {
+    "appId": "rocks.brsc.music",
+    "productName": "brsc music",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      { "from": "dist", "to": "backend" },
+      { "from": "public", "to": "public" },
+      { "from": "assets", "to": "assets" }
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "assets/brsc-note.ico"
+    },
+    "portable": {
+      "artifactName": "brsc-music-${version}-portable.${ext}"
+    }
+  }
+}
