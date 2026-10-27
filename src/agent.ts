@@ -97,24 +97,40 @@ export const AGENT_SOURCE: string = `(() => {
   }
 
   // --- видеошот (короткий mp4-луп) через supplement API, кэш по текущему треку ---
-  var _shot = { id: null, url: null, loading: false };
+  var _shot = { id: null, url: null, loading: false, retryAt: 0 };
+  var _shotRequest = null;
   function _oauthToken() {
     try { var o = JSON.parse(localStorage.getItem('oauth') || '{}'); return (typeof o.value === 'string' ? o.value : (o.value && o.value.access_token)) || o.access_token || null; } catch (e) { return null; }
   }
   function _loadShot(id) {
-    if (!id || _shot.loading || _shot.id === id) return;
-    _shot.loading = true;
+    if (!id) return;
+    if (_shot.id === id && (_shot.loading || Date.now() < _shot.retryAt)) return;
+    // Смена трека отменяет старый запрос; его ответ уже не может затереть новый.
+    if (_shotRequest) _shotRequest.abort();
+    var controller = new AbortController();
+    _shotRequest = controller;
+    _shot = { id: id, url: null, loading: true, retryAt: 0 };
+    var timer = setTimeout(function () { controller.abort(); }, 10000);
     var tok = _oauthToken();
     var headers = tok ? { Authorization: 'OAuth ' + tok } : {};
-    fetch('https://api.music.yandex.net/tracks/' + id + '/supplement', { headers: headers })
-      .then(function (r) { return r.json(); })
+    fetch('https://api.music.yandex.net/tracks/' + encodeURIComponent(id) + '/supplement', { headers: headers, signal: controller.signal })
+      .then(function (r) { if (!r.ok) throw new Error('supplement HTTP ' + r.status); return r.json(); })
       .then(function (j) {
+        if (j && j.error) throw new Error('supplement API error');
+        if (_shotRequest !== controller) return;
         var sup = (j && j.result) || j || {};
         var url = null;
-        try { if (Array.isArray(sup.clips) && sup.clips[0] && sup.clips[0].previewUrl) url = sup.clips[0].previewUrl; } catch (e) {}
-        _shot = { id: id, url: url, loading: false };
+        if (Array.isArray(sup.clips)) {
+          var clip = sup.clips.find(function (c) { return c && typeof c.previewUrl === 'string' && c.previewUrl; });
+          if (clip) url = clip.previewUrl;
+        }
+        // Обновляем и успешный результат: ссылка на видео может со временем истечь.
+        _shot = { id: id, url: url, loading: false, retryAt: Date.now() + 300000 };
       })
-      .catch(function () { _shot = { id: id, url: null, loading: false }; });
+      .catch(function () {
+        if (_shotRequest === controller) _shot = { id: id, url: null, loading: false, retryAt: Date.now() + 15000 };
+      })
+      .finally(function () { clearTimeout(timer); if (_shotRequest === controller) _shotRequest = null; });
   }
 
   // --- публичное состояние ---

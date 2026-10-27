@@ -17,8 +17,9 @@ app.json
 .brsc-state.json
 .window-state.json
 
-# контекст для Claude Code — локальный
+# локальные инструкции для ИИ
 CLAUDE.md
+AGENTS.md
 
 # системное / редакторы
 .DS_Store

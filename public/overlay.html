@@ -177,14 +177,52 @@
 
   var st = { title: null, artist: null, cover: null, shot: null, pos: 0, dur: 0, playing: false, color: null };
 
+  var mediaKey = null, mediaAttempt = 0, mediaRetryAt = 0, mediaStarting = false;
+  function showCover() { cover.style.display = ''; shot.style.display = 'none'; }
+  function videoFailed() {
+    mediaStarting = false;
+    mediaRetryAt = Date.now() + 15000;
+    showCover();
+  }
+  shot.addEventListener('error', videoFailed);
+  shot.addEventListener('playing', function () {
+    if (!mediaKey || mediaRetryAt) return;
+    mediaStarting = false;
+    shot.style.display = ''; cover.style.display = 'none';
+  });
   function setMedia(s) {
-    var wantShot = s.overlay && s.overlay.media === 'videoshot' && s.videoShot;
-    if (wantShot) {
-      if (s.videoShot !== st.shot) { shot.src = s.videoShot; st.shot = s.videoShot; var p = shot.play(); if (p && p.catch) p.catch(function () {}); }
-      shot.style.display = ''; cover.style.display = 'none';
-    } else {
-      if (s.cover && s.cover !== st.cover) { cover.src = s.cover; st.cover = s.cover; }
-      cover.style.display = ''; shot.style.display = 'none';
+    if (s.cover && s.cover !== st.cover) { cover.src = s.cover; st.cover = s.cover; }
+    var url = s.overlay && s.overlay.media === 'videoshot' && s.videoShot;
+    // ID учитываем отдельно от URL: одна ссылка не должна удерживать кадр старого трека.
+    var key = url ? String(s.currentId || '') + '|' + url : null;
+    if (key !== mediaKey) {
+      mediaAttempt++; mediaStarting = false; mediaRetryAt = 0;
+      mediaKey = key;
+      shot.pause(); shot.removeAttribute('src'); shot.load();
+      st.shot = null;
+      showCover();
+    }
+    if (!url) { showCover(); return; }
+    if (mediaStarting || Date.now() < mediaRetryAt) return;
+    if (shot.paused || shot.error || mediaRetryAt || st.shot !== url) {
+      var attempt = ++mediaAttempt;
+      mediaStarting = true;
+      if (shot.error || mediaRetryAt || st.shot !== url) { shot.src = url; st.shot = url; shot.load(); }
+      mediaRetryAt = 0;
+      var timer = setTimeout(function () {
+        if (attempt !== mediaAttempt) return;
+        mediaAttempt++; shot.pause(); videoFailed();
+      }, 10000);
+      var p = shot.play();
+      if (p && p.then) p.then(function () {
+        clearTimeout(timer);
+        if (attempt !== mediaAttempt) return;
+        mediaStarting = false;
+        shot.style.display = ''; cover.style.display = 'none';
+      }).catch(function () {
+        clearTimeout(timer);
+        if (attempt === mediaAttempt) videoFailed();
+      });
     }
   }
 
