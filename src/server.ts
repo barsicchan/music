@@ -1,5 +1,6 @@
 // Локальный HTTP-сервер: отдаёт панель управления и API для заказов/транспорта.
 import http from 'node:http';
+import packageInfo from '../package.json' with { type: 'json' };
 import type { IncomingMessage, ServerResponse, Server } from 'node:http';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -110,6 +111,7 @@ export function startServer(
         return send(res, 200, {
           ok: true,
           connected: await player.isAlive(),
+          appVersion: packageInfo.version,
           state: state.status === 'fulfilled' ? state.value : { error: String(state.reason) },
           queue: queueSnap,
           requests: requests.list().slice(0, 20),

@@ -495,7 +495,7 @@
       <span class="st"><span class="d" id="st-tw"></span>Twitch-чат</span>
       <span class="st"><span class="d" id="st-bot"></span>Бот</span>
       <span class="st"><span class="d on" id="st-srv"></span>Сервер: <span id="st-port">8620</span></span>
-      <span class="ver">brsc / music · v0.1</span>
+      <span class="ver" id="appVersion">brsc / music</span>
     </div>
   </div>
 </div>
@@ -889,6 +889,7 @@ async function logoutTwitch(which) { const r = await api('/api/twitch/logout', {
 async function refresh() {
   try {
     const d = await api('/api/state');
+    if (d.appVersion) $('appVersion').textContent = 'brsc / music · v' + d.appVersion;
     const on = d.connected && d.state && !d.state.error;
     const s = d.state || {}; window._lastState = s;
     $('npTitle').textContent = s.title || '—'; $('npArtist').textContent = s.artist || '';
