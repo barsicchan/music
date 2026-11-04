@@ -27,6 +27,7 @@ export interface OverlayConfig {
   glass: boolean;      // режим «жидкое стекло» (полупрозрачная стеклянная плашка)
 }
 export interface AppConfig {
+  sidebarCollapsed: boolean;
   port: number;           // порт HTTP-панели/оверлея (нужен фиксированный для OBS)
   overlay: OverlayConfig;
   closeToTray: boolean;   // крестик сворачивает в трей (true, по умолчанию) или закрывает (false)

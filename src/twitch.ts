@@ -1,3 +1,4 @@
+import { writeSettings } from './settings-file.ts';
 // Контроллер Twitch: два аккаунта (основной + бот), выбор «кто отвечает»,
 // вход (implicit OAuth flow), чат-подключение и обработка команды !sr → заказ → ответ.
 import crypto from 'node:crypto';
@@ -128,8 +129,15 @@ export class TwitchController {
     this.requests = requests;
     this.commands = new CommandEngine(player, requests);
     this.config = loadTwitch();
-    // миграция: файл с токенами открытым текстом → сразу перезаписать зашифрованным
-    if ((this.config.main.accessToken || this.config.bot.accessToken) && !lastSecret) this.save();
+    try {
+      const botPath = path.join(DATA_DIR, 'bot.json');
+      const rawBot = fs.existsSync(botPath) ? JSON.parse(fs.readFileSync(botPath, 'utf8')) : {};
+      if (rawBot.commands?.sr?.trigger === undefined && this.config.command) {
+        this.commands.config.commands.sr!.trigger = this.config.command;
+      }
+    } catch (e) { logger.warn('не удалось прочитать сохранённый триггер команды'); }
+    this.config.command = this.commands.getConfig().commands.sr!.trigger;
+    // При запуске настройки только читаются; шифрование выполняется при следующем сохранении.
     // проверка эфира — по требованию (при заказе), с кэшем; не фоновым опросом
     requests.setLiveProvider(() => this.getLive());
   }
@@ -146,8 +154,8 @@ export class TwitchController {
   }
 
   private save(): void {
-    try { fs.writeFileSync(TWITCH_PATH, serializeTwitch(this.config), 'utf8'); }
-    catch (e) { console.error('twitch.json save error:', (e as Error).message); }
+    try { writeSettings(TWITCH_PATH, serializeTwitch(this.config)); }
+    catch (e) { console.error('twitch.json save error:', (e as Error).message); throw e; }
   }
 
   private channelName(): string {
@@ -172,7 +180,7 @@ export class TwitchController {
       connected: !!this.chat && this.chat.connected,
       channel: this.channelName(),
       clientId: this.config.clientId,
-      command: this.config.command,
+      command: this.commands.getConfig().commands.sr!.trigger,
       announce: this.config.announce,
       replyWith: this.config.replyWith,
       mainLogin: this.config.main.login || null,
@@ -197,10 +205,9 @@ export class TwitchController {
     this.config.clientId = (this.config.clientId || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '') || DEFAULT_CLIENT_ID;
     // логин Twitch — только [a-z0-9_]; заодно исключает переносы строк в IRC-командах (JOIN #…)
     this.config.channel = (this.config.channel || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
-    this.config.command = (this.config.command || '!sr').trim();
+    this.config.command = this.commands.getConfig().commands.sr!.trigger;
     if (this.config.replyWith !== 'bot') this.config.replyWith = 'main';
-    // держим триггер команды заказа в синхроне с движком команд
-    this.commands.setCommand('sr', { trigger: this.config.command });
+    // Триггер берём только из bot.json; настройки Twitch его не меняют.
     this.save();
     this.error = null;
     void this.connect(); // connect() сам решит: подключиться (есть вход) или отключиться

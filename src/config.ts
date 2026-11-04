@@ -1,3 +1,4 @@
+import { writeSettings } from './settings-file.ts';
 // Загрузка/сохранение настроек фильтров из config.json (в корне проекта).
 // Файла может не быть — тогда берутся значения по умолчанию.
 import fs from 'node:fs';
@@ -60,8 +61,9 @@ export function loadConfig(): FilterConfig {
 
 export function saveConfig(cfg: FilterConfig): void {
   try {
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
+    writeSettings(CONFIG_PATH, JSON.stringify(cfg, null, 2) + '\n');
   } catch (e) {
     console.error('Не удалось сохранить config.json:', (e as Error).message);
+    throw e;
   }
 }

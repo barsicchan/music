@@ -1,3 +1,4 @@
+import { writeSettings } from './settings-file.ts';
 // Движок команд чата: разбирает сообщение, проверяет права по уровню зрителя,
 // выполняет действие и возвращает текст ответа по настраиваемому шаблону.
 import fs from 'node:fs';
@@ -128,8 +129,8 @@ export class CommandEngine {
 
   getConfig(): BotConfig { return this.config; }
   save(): void {
-    try { fs.writeFileSync(BOT_PATH, JSON.stringify(this.config, null, 2) + '\n', 'utf8'); }
-    catch (e) { logger.error('bot.json save error', e); }
+    try { writeSettings(BOT_PATH, JSON.stringify(this.config, null, 2) + '\n'); }
+    catch (e) { logger.error('bot.json save error', e); throw e; }
   }
   setResponses(patch: Record<string, string>): BotConfig {
     for (const [k, v] of Object.entries(patch)) if (typeof v === 'string') this.config.responses[k] = v;

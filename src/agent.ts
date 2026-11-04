@@ -69,7 +69,16 @@ export const AGENT_SOURCE: string = `(() => {
   }
 
   // --- утилиты ---
-  const entArr = () => main().queueController.playerQueue.queueState.entityList.observableValue.v;
+  // index относится к порядку воспроизведения, а не к исходному списку треков.
+  // При перемешивании order переводит позицию воспроизведения в индекс entityList.
+  const entArr = () => {
+    const queue = main().queueController.playerQueue.queueState;
+    const entities = queue.entityList.observableValue.v;
+    const storedOrder = queue.order && (queue.order.observableValue ?? queue.order.value);
+    const order = storedOrder && (storedOrder.v ?? storedOrder);
+    if (!Array.isArray(order)) return entities;
+    return order.map((index) => entities[index]);
+  };
   const curIndex = () => { try { return main().playbackState.queueState.index.value; } catch { return undefined; } };
   function digId(e) {
     let found; const seen = new Set();

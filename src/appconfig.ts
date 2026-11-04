@@ -1,3 +1,4 @@
+import { writeSettings } from './settings-file.ts';
 // Настройки приложения (app.json в корне): порт панели и параметры оверлея.
 // Отдельно от config.json (фильтры заказов), т.к. порт читает и Electron-оболочка.
 import fs from 'node:fs';
@@ -10,6 +11,7 @@ const APP_PATH = path.join(DATA_DIR, 'app.json');
 const SIZES: OverlaySize[] = ['square', 'slim', 'regular', 'large'];
 
 export const DEFAULT_APP_CONFIG: AppConfig = {
+  sidebarCollapsed: false,
   port: 8620,
   overlay: { media: 'cover', size: 'large', glass: false },
   closeToTray: true,
@@ -22,6 +24,7 @@ export function normalizeApp(raw: Partial<AppConfig> | null | undefined): AppCon
   const size: OverlaySize = SIZES.includes(r.overlay?.size as OverlaySize) ? (r.overlay!.size as OverlaySize) : 'large';
   const glass = !!r.overlay?.glass;
   return {
+    sidebarCollapsed: r.sidebarCollapsed === true,
     port: Number.isInteger(port) && port >= 1 && port <= 65535 ? port : DEFAULT_APP_CONFIG.port,
     overlay: { media, size, glass },
     closeToTray: r.closeToTray !== false, // по умолчанию true; false только если явно задано
@@ -39,8 +42,9 @@ export function loadAppConfig(): AppConfig {
 
 export function saveAppConfig(cfg: AppConfig): void {
   try {
-    fs.writeFileSync(APP_PATH, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
+    writeSettings(APP_PATH, JSON.stringify(cfg, null, 2) + '\n');
   } catch (e) {
     console.error('Не удалось сохранить app.json:', (e as Error).message);
+    throw e;
   }
 }

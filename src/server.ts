@@ -8,7 +8,7 @@ import type { Player } from './player.ts';
 import type { RequestManager } from './requests.ts';
 import type { TwitchController } from './twitch.ts';
 import { log, recentLogs } from './log.ts';
-import { runDiagnostics, deepTest } from './diagnostics.ts';
+import { runDiagnostics, deepTest, getDiagnosticsStatus } from './diagnostics.ts';
 import { loadAppConfig, saveAppConfig, normalizeApp } from './appconfig.ts';
 import { PUBLIC_DIR } from './paths.ts';
 import type { AppConfig } from './types.ts';
@@ -124,6 +124,10 @@ export function startServer(
         return send(res, 200, { ok: true, lines: recentLogs(400) });
       }
 
+      if (url.pathname === '/api/diagnostics/status' && req.method === 'GET') {
+        try { return send(res, 200, { ok: true, status: await getDiagnosticsStatus(player) }); }
+        catch (e) { return send(res, 500, { ok: false, error: (e as Error).message }); }
+      }
       if (url.pathname === '/api/diagnostics' && req.method === 'GET') {
         try { return send(res, 200, { ok: true, diag: await runDiagnostics(player) }); }
         catch (e) { return send(res, 500, { ok: false, error: (e as Error).message }); }

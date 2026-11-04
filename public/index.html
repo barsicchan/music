@@ -206,6 +206,15 @@
   .logview{margin:0;font:12px/1.55 ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-word;max-height:64vh;overflow-y:auto;color:#b0b0b6;}
   .logview .lg-warn{color:var(--warn);} .logview .lg-error{color:var(--err);}
   .diag-ic{width:18px;text-align:center;flex:none;font-weight:700;} .diag-ic.ok{color:var(--ok);} .diag-ic.no{color:#ff6b6b;}
+  #pane-diag .card{display:flex;flex-direction:column;gap:12px;}
+  #pane-diag h2,#pane-diag .muted{margin:0;padding:0;}
+  .diag-section{display:flex;flex-direction:column;gap:12px;padding-top:20px;margin-top:8px;border-top:1px solid var(--line);}
+  .diag-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .diag-history{font-size:13px;line-height:1.6;color:var(--mut);}
+  .diag-history.warn{padding:12px 14px;border:1px solid var(--warn);border-radius:12px;background:rgba(224,163,103,.12);color:var(--warn);}
+  .diag-history.ok{color:var(--ok);}
+  .diag-history.error{color:#ff6b6b;}
+  #pane-diag li{flex-wrap:wrap;row-gap:4px;}
   .diag-det{color:var(--dim);font-size:12px;}
   details summary{cursor:pointer;color:var(--mut);font-size:13px;}
 
@@ -450,16 +459,24 @@
       <div class="pane" id="pane-diag">
         <div class="card">
           <h2>Диагностика</h2>
-          <div id="diag-version" class="muted">версия клиента: —</div>
-          <div id="diag-banner" style="display:none; margin:10px 0; padding:9px 11px; border-radius:12px; font-size:13px"></div>
-          <div style="margin:12px 0; display:flex; gap:8px; flex-wrap:wrap">
-            <button class="primary" onclick="loadDiag()">Проверить</button>
-            <button onclick="runDeep()">Глубокая проверка (вставит и уберёт трек)</button>
-            <span class="status" id="diagStatus" style="display:inline; align-self:center"></span>
-          </div>
-          <ul id="diag-list"><li class="muted">нажми «Проверить»</li></ul>
-          <div id="deep-wrap" style="display:none; margin-top:14px"><h2>Глубокая проверка (реальная вставка)</h2><ul id="deep-list"></ul></div>
-          <div class="hint" style="margin-top:12px">Диагностика полезна после обновления клиента ЯМ: показывает, что из внутренних точек ещё работает.</div>
+          <div class="hint">Диагностика полезна после обновления клиента ЯМ: показывает, что из внутренних точек ещё работает.</div>
+          <div id="diag-version" class="muted">Версия клиента ЯМ: —</div>
+          <section class="diag-section">
+          <h2>Базовая проверка</h2>
+          <div class="hint">Проверяет доступность данных и методов плеера, не меняя очередь. Проверка вставки заказов здесь проверяет только наличие методов.</div>
+          <div id="basic-history" class="diag-history">Ещё не запускалась</div>
+          <div class="diag-actions"><button id="basic-button" class="primary" onclick="loadDiag()">Запустить базовую проверку</button>
+          <span class="status" id="diagStatus" style="display:inline"></span></div>
+          <ul id="diag-list"><li><span class="diag-ic">—</span><span class="q-title">Якорь поиска плеера (кнопка PLAY)</span><span class="diag-det">не проверено</span></li><li><span class="diag-ic">—</span><span class="q-title">Плеер MAIN найден</span><span class="diag-det">не проверено</span></li><li><span class="diag-ic">—</span><span class="q-title">Состояние плеера (sonataState)</span><span class="diag-det">не проверено</span></li><li><span class="diag-ic">—</span><span class="q-title">Текущий трек (mediaSession)</span><span class="diag-det">не проверено</span></li><li><span class="diag-ic">—</span><span class="q-title">Очередь читается</span><span class="diag-det">не проверено</span></li><li><span class="diag-ic">—</span><span class="q-title">Вставка заказов (injectNext / remove)</span><span class="diag-det">не проверено</span></li><li><span class="diag-ic">—</span><span class="q-title">Запуск и переключение треков</span><span class="diag-det">не проверено</span></li><li><span class="diag-ic">—</span><span class="q-title">Пауза и громкость</span><span class="diag-det">не проверено</span></li><li><span class="diag-ic">—</span><span class="q-title">Поиск треков (API ЯМ)</span><span class="diag-det">не проверено</span></li></ul>
+          </section>
+          <section class="diag-section">
+          <h2>Глубокая проверка</h2>
+          <div class="hint">Для заказов из чата: найдёт тестовый трек, вставит следующим и удалит из очереди. Если используете только оверлей, эту проверку можно не запускать.</div>
+          <div id="deep-history" class="diag-history">Ещё не запускалась</div>
+          <div class="diag-actions"><button id="deep-button" onclick="runDeep()">Запустить глубокую проверку</button>
+          <span class="status" id="deepStatus" style="display:inline"></span></div>
+          <ul id="deep-list"><li><span class="diag-ic">—</span><span class="q-title">Поиск трека</span><span class="diag-det">не проверено</span></li><li><span class="diag-ic">—</span><span class="q-title">Вставка следующим (injectNext)</span><span class="diag-det">не проверено</span></li><li><span class="diag-ic">—</span><span class="q-title">Удаление из очереди (removeByEntityIds)</span><span class="diag-det">не проверено</span></li></ul>
+          </section>
         </div>
       </div>
 
@@ -512,13 +529,16 @@ function showTab(name) {
   if (name === 'log') refreshLog();
   if (name === 'overlay') { if (!overlayCfgLoaded) loadOverlayCfg(); renderOverlayPreview(); }
   if (name === 'settings' && !appSettingsLoaded) loadAppSettings();
-  if (name === 'diag' && !diagLoaded) loadDiag();
+  if (name === 'diag') loadDiagStatus();
 }
 
 // --- сайдбар: сворачивание (запоминаем) ---
-function toggleSide() {
+async function toggleSide() {
   const c = $('side').classList.toggle('collapsed');
-  try { localStorage.setItem('brsc.collapsed', c ? '1' : '0'); } catch (e) {}
+  try {
+    const r = await api('/api/appconfig', { sidebarCollapsed: c });
+    if (!r.ok) throw new Error(r.error || 'ошибка сохранения');
+  } catch (e) { $('side').classList.toggle('collapsed', !c); alert('Не удалось сохранить вид меню: ' + e.message); }
 }
 
 // --- оверлейные скроллбары с фейдом ---
@@ -718,32 +738,56 @@ function renderLog(lines) {
 async function refreshLog() { try { const r = await api('/api/logs'); if (r.ok) renderLog(r.lines); } catch (e) {} }
 
 // --- диагностика ---
-let diagLoaded = false;
 const diagIcon = (ok) => '<span class="diag-ic ' + (ok ? 'ok' : 'no') + '">' + (ok ? '✓' : '✗') + '</span>';
 function renderChecks(el, checks) {
   el.innerHTML = (checks || []).map((c) => '<li>' + diagIcon(c.ok) + '<span class="q-title">' + esc(c.name) + '</span>' + (c.detail ? '<span class="diag-det">' + esc(c.detail) + '</span>' : '') + '</li>').join('');
 }
+async function loadDiagStatus() {
+  try {
+    const d = await api('/api/diagnostics/status');
+    if (!d.ok) throw new Error(d.error || 'ошибка');
+    const r = d.status;
+    $('diag-version').textContent = 'Версия клиента ЯМ: ' + (r.version || 'неизвестна');
+    for (const kind of ['basic', 'deep']) {
+      const last = r[kind];
+      const el = $(kind + '-history');
+      const outdated = !!(last && r.version && last.version !== r.version);
+      el.className = 'diag-history' + (outdated ? ' warn' : last ? (last.ok ? ' ok' : ' error') : '');
+      if (outdated) {
+        el.textContent = '⚠ Яндекс Музыка обновилась: ' + (last.version || '?') + ' → ' + r.version + '. ' + (kind === 'basic' ? 'Запустите базовую проверку.' : 'Если используете заказы треков, запустите глубокую проверку.');
+      } else {
+        el.textContent = last ? (last.ok ? '✓ Проверка пройдена' : '✗ Проверка выявила проблемы') + ' · ЯМ ' + (last.version || '?') : 'Ещё не запускалась';
+      }
+    }
+  } catch (e) { $('diag-version').textContent = 'Не удалось получить сведения: ' + e.message; }
+}
 async function loadDiag() {
+  const button = $('basic-button');
+  if (button.disabled) return;
+  button.disabled = true;
   setStatus('diagStatus', 'проверяю…', '');
-  const d = await api('/api/diagnostics');
-  if (!d.ok) { setStatus('diagStatus', '✗ ' + (d.error || 'ошибка'), 'err'); return; }
-  const r = d.diag;
-  $('diag-version').innerHTML = 'Версия клиента ЯМ: <b>' + esc(r.version || '?') + '</b>' + (r.storedVersion ? ' · последняя проверенная: ' + esc(r.storedVersion) : '');
-  const b = $('diag-banner');
-  if (r.versionChanged) { b.style.display = ''; b.style.background = '#3a2e10'; b.style.color = '#ffcc00'; b.textContent = '⚠ Клиент обновился (' + r.storedVersion + ' → ' + r.version + '). Проверь, что всё работает.'; }
-  else if (r.ok) { b.style.display = ''; b.style.background = '#14481f'; b.style.color = '#cfefd4'; b.textContent = '✓ Все проверки пройдены на версии ' + r.version + '.'; }
-  else { b.style.display = ''; b.style.background = '#3a1a1f'; b.style.color = '#f2a3ab'; b.textContent = '✗ Проблемы: ' + (r.total - r.passed) + ' из ' + r.total + ' проверок не прошли.'; }
-  renderChecks($('diag-list'), r.checks);
-  setStatus('diagStatus', 'пройдено ' + r.passed + '/' + r.total, r.passed === r.total ? 'ok' : 'err');
-  diagLoaded = true;
+  try {
+    const d = await api('/api/diagnostics');
+    if (!d.ok) throw new Error(d.error || 'ошибка');
+    renderChecks($('diag-list'), d.diag.checks);
+    setStatus('diagStatus', 'пройдено ' + d.diag.passed + '/' + d.diag.total, d.diag.ok ? 'ok' : 'err');
+    await loadDiagStatus();
+  } catch (e) { setStatus('diagStatus', '✗ ' + e.message, 'err'); }
+  finally { button.disabled = false; }
 }
 async function runDeep() {
-  setStatus('diagStatus', 'глубокая проверка (вставляю трек)…', '');
-  const d = await api('/api/diagnostics/deep', {});
-  $('deep-wrap').style.display = '';
-  if (!d.ok) { $('deep-list').innerHTML = '<li class="muted">ошибка: ' + esc(d.error || '') + '</li>'; setStatus('diagStatus', '✗ ошибка', 'err'); return; }
-  renderChecks($('deep-list'), d.deep.steps);
-  setStatus('diagStatus', d.deep.ok ? '✓ вставка/удаление работают' : '✗ есть проблемы', d.deep.ok ? 'ok' : 'err');
+  const button = $('deep-button');
+  if (button.disabled) return;
+  button.disabled = true;
+  setStatus('deepStatus', 'проверяю вставку и удаление…', '');
+  try {
+    const d = await api('/api/diagnostics/deep', {});
+    if (!d.ok) throw new Error(d.error || 'ошибка');
+    renderChecks($('deep-list'), d.deep.steps);
+    setStatus('deepStatus', d.deep.ok ? '✓ вставка/удаление работают' : '✗ есть проблемы', d.deep.ok ? 'ok' : 'err');
+    await loadDiagStatus();
+  } catch (e) { setStatus('deepStatus', '✗ ' + e.message, 'err'); }
+  finally { button.disabled = false; }
 }
 function renderPending(list) {
   const card = $('pendingCard'), ul = $('pending');
@@ -875,7 +919,7 @@ async function refresh() {
 }
 
 // --- инициализация ---
-try { if (localStorage.getItem('brsc.collapsed') === '1') $('side').classList.add('collapsed'); } catch (e) {}
+api('/api/appconfig').then((d) => { if (d.ok) $('side').classList.toggle('collapsed', !!d.app.sidebarCollapsed); }).catch(() => {});
 if (window.winctl) document.body.classList.add('has-titlebar'); // шапка окна — только в приложении
 $('st-port').textContent = location.port || '8620';
 initSB(document.querySelector('.content.scroll-area'), $('main'));
